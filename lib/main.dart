@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-
 import 'Authentication/Register.dart';
 import 'Bloc/RegisterBloc.dart';
 import 'Database/UserRepository.dart';

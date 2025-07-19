@@ -1,41 +1,28 @@
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:equatable/equatable.dart';
 
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../Database/UserRepository.dart';
 import '../Model/UserModel.dart';
 
 /// 🔸 EVENTS
-abstract class RegisterEvent extends Equatable {
-  @override
-  List<Object?> get props => [];
-}
+sealed class RegisterEvent {}
 
-class SubmitRegisterEvent extends RegisterEvent {
+final class SubmitRegisterEvent extends RegisterEvent {
   final UserModel user;
   SubmitRegisterEvent(this.user);
-
-  @override
-  List<Object?> get props => [user];
 }
 
 /// 🔹 STATES
-abstract class RegisterState extends Equatable {
-  @override
-  List<Object?> get props => [];
-}
+sealed class RegisterState {}
 
-class RegisterInitial extends RegisterState {}
+final class RegisterInitial extends RegisterState {}
 
-class RegisterLoading extends RegisterState {}
+final class RegisterLoading extends RegisterState {}
 
-class RegisterSuccess extends RegisterState {}
+final class RegisterSuccess extends RegisterState {}
 
-class RegisterFailure extends RegisterState {
+final class RegisterFailure extends RegisterState {
   final String error;
   RegisterFailure(this.error);
-
-  @override
-  List<Object?> get props => [error];
 }
 
 /// 🔸 BLOC
