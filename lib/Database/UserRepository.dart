@@ -26,4 +26,17 @@ class UserRepository {
   Future<void> registerUser(UserModel user) async {
     await _db.insert('users', user.toJson());
   }
+  Future<UserModel?> loginUser(String email, String password) async {
+    final result = await _db.query(
+      'users',
+      where: 'email = ? AND password = ?',
+      whereArgs: [email, password],
+    );
+
+    if (result.isNotEmpty) {
+      return UserModel.fromJson(result.first);
+    }
+    return null;
+  }
+
 }
