@@ -1,27 +1,59 @@
 import 'package:flutter/material.dart';
-import '../Model/UserModel.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../Bloc/nav_bloc.dart';
+import '../Library/Widgets/Topbar.dart';
+import '../Library/Widgets/sidebar.dart';
 
-class DashboardScreen extends StatelessWidget {
-  final UserModel user;
-  const DashboardScreen({required this.user, super.key});
+import 'AddUser.dart';
+import 'AllUsers.dart';
+import 'Customer.dart';
+import 'TransportPage.dart';
 
+
+class Dashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Dashboard"),
-      automaticallyImplyLeading: false,),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Text("Welcome, ${user.shopName}!",
-                style: const TextStyle(fontSize: 20)),
-            const SizedBox(height: 20),
-            Text("Email: ${user.email}"),
-            Text("Mobile: ${user.number}"),
-            Text("Address: ${user.address}"),
-          ],
-        ),
+      body: Row(
+        children: [
+          Sidebar(), // Left panel
+          Expanded(
+            child: Column(
+              children: [
+                Topbar(), // Top bar
+                Expanded(
+                  child: BlocBuilder<NavCubit, String>(
+                    builder: (context, state) {
+                      switch (state) {
+                        case 'transport':
+                          return TransportPage();
+                        case 'customer':
+                          return Customer();
+                        // case 'supplier':
+                        //   return SupplierPage();
+                        // case 'app_parties':
+                        //   return AppPartiesPage();
+                        // case 'product':
+                        //   return ProductPage();
+                        case 'all_users':
+                          return Allusers();
+                        case 'add_user':
+                          return AddUsers();
+                        default:
+                          return Center(
+                            child: Text(
+                              'Welcome to Dashboard',
+                              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                            ),
+                          );
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

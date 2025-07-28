@@ -9,18 +9,19 @@ class UserRepository {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
 
+    
     _db = await databaseFactory.openDatabase('app_data.db');
-
     await _db.execute('''
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        shop_name TEXT,
-        address TEXT,
-        email TEXT,
-        number TEXT,
-        password TEXT
-      );
-    ''');
+    CREATE TABLE IF NOT EXISTS users (  
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      shop_name TEXT,
+      address TEXT,
+      email TEXT,
+      number TEXT,
+      password TEXT,
+      role TEXT
+    );
+  ''');
   }
 
   Future<void> registerUser(UserModel user) async {

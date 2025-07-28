@@ -1,10 +1,11 @@
 class UserModel {
-  final int? id;
-  final String shopName;
-  final String address;
-  final String email;
-  final String number;
-  final String password;
+  int? id;
+  String shopName;
+  String address;
+  String email;
+  String number;
+  String password;
+  String role; // ✅ Add this
 
   UserModel({
     this.id,
@@ -13,27 +14,26 @@ class UserModel {
     required this.email,
     required this.number,
     required this.password,
+    required this.role,
   });
 
-  Map<String, dynamic> toJson() {
-    return {
-      'shop_name': shopName,
-      'address': address,
-      'email': email,
-      'number': number,
-      'password': password,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'shop_name': shopName,
+    'address': address,
+    'email': email,
+    'number': number,
+    'password': password,
+    'role': role,
+  };
 
-  /// ✅ ADD THIS fromJson CONSTRUCTOR
-  factory UserModel.fromJson(Map<String, dynamic> json) {
-    return UserModel(
-      id: json['id'],
-      shopName: json['shop_name'],
-      address: json['address'],
-      email: json['email'],
-      number: json['number'],
-      password: json['password'],
-    );
-  }
+  factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
+    id: json['id'],
+    shopName: json['shop_name'],
+    address: json['address'],
+    email: json['email'],
+    number: json['number'],
+    password: json['password'],
+    role: json['role'], // ✅ Add this
+  );
 }

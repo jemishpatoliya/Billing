@@ -151,7 +151,7 @@ class _RegisterState extends State<Register> {
                             address: addressController.text,
                             email: emailController.text,
                             number: numberController.text,
-                            password: passController.text,
+                            password: passController.text, role: '',
                           );
                           context.read<RegisterBloc>().add(SubmitRegisterEvent(user));
                         }

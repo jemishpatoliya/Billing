@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../Database/UserRepository.dart';
 import '../Model/UserModel.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// EVENTS
 sealed class LoginEvent {}
@@ -45,12 +46,16 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
     try {
       final user = await repository.loginUser(event.email, event.password);
       if (user != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('loggedInEmail', user.email ?? ''); // Save email
+
         emit(LoginSuccess(user));
       } else {
         emit(LoginFailure('Invalid email or password'));
       }
     } catch (e) {
       emit(LoginFailure(e.toString()));
+      print(e.toString());
     }
   }
 }

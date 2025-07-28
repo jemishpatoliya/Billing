@@ -60,7 +60,7 @@ class _LoginState extends State<Login> {
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => DashboardScreen(user: state.user),
+                            builder: (_) => Dashboard(),
                           ),
                         );
                       } else if (state is LoginFailure) {
