@@ -4,10 +4,12 @@ import 'Authentication/Register.dart';
 import 'Authentication/Login.dart';
 import 'Bloc/RegisterBloc.dart';
 import 'Bloc/nav_bloc.dart';
+import 'Dashboard/AddUser.dart';
 import 'Dashboard/Dashboard.dart';
 import 'Database/UserRepository.dart';
 import 'Library/Widgets/sidebar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'Model/UserModel.dart';
 
 
 void main() async {
@@ -46,6 +48,10 @@ class MyApp extends StatelessWidget {
           '/register': (context) => Register(repository: userRepo),
           '/login': (context) => Login(repository: userRepo),
           '/dashboard': (context) => Dashboard(),
+          '/addUser': (context) {
+            final user = ModalRoute.of(context)!.settings.arguments as UserModel?;
+            return AddUsers(user: user);
+          },
         },
       ),
     );

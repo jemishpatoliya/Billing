@@ -9,7 +9,6 @@ class UserRepository {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
 
-    
     _db = await databaseFactory.openDatabase('app_data.db');
     await _db.execute('''
     CREATE TABLE IF NOT EXISTS users (  
@@ -19,7 +18,9 @@ class UserRepository {
       email TEXT,
       number TEXT,
       password TEXT,
-      role TEXT
+      role TEXT,
+      status TEXT,
+      permissions TEXT
     );
   ''');
   }
@@ -39,5 +40,17 @@ class UserRepository {
     }
     return null;
   }
+  Future<List<UserModel>> getAllUsers() async {
+    final result = await _db.query('users');
+    return result.map((row) => UserModel.fromJson(row)).toList();
+  }
 
+  Future<void> updateUser(UserModel user) async {
+    await _db.update(
+      'users',
+      user.toJson(),
+      where: 'id = ?',
+      whereArgs: [user.id],
+    );
+  }
 }

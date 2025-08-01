@@ -1,7 +1,12 @@
+
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../Database/UserRepository.dart';
+import '../Model/UserModel.dart';
 
 class AddUsers extends StatefulWidget {
-  const AddUsers({super.key});
+  final UserModel? user;
+  const AddUsers({super.key, this.user});
 
   @override
   State<AddUsers> createState() => _AddUsersState();
@@ -11,6 +16,9 @@ class _AddUsersState extends State<AddUsers> {
   final _formKey = GlobalKey<FormState>();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  final numberController = TextEditingController();
+  final addressController = TextEditingController();
+  String selectedRole = 'User';
 
   String selectedStatus = 'Active';
   bool selectAll = false;
@@ -84,6 +92,22 @@ class _AddUsersState extends State<AddUsers> {
                   const SizedBox(height: 12),
                   buildInputField("Password", passwordController, Icons.lock, obscure: true),
                   const SizedBox(height: 12),
+                  buildInputField("Number", numberController, Icons.phone),
+                  const SizedBox(height: 12),
+                  buildInputField("Address", addressController, Icons.home),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: "Role",
+                      border: OutlineInputBorder(),
+                    ),
+                    value: selectedRole,
+                    items: ['User', 'Admin'].map((role) {
+                      return DropdownMenuItem(value: role, child: Text(role));
+                    }).toList(),
+                    onChanged: (val) => setState(() => selectedRole = val!),
+                  ),
+                  const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     decoration: InputDecoration(
                       labelText: "Status",
@@ -108,17 +132,36 @@ class _AddUsersState extends State<AddUsers> {
                   buildPermissionTable(),
                   const SizedBox(height: 20),
                   ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       if (_formKey.currentState!.validate()) {
-                        print("Email: ${emailController.text}");
-                        print("Password: ${passwordController.text}");
-                        print("Status: $selectedStatus");
-                        print("Permissions: $permissions");
-
-                        // TODO: Save to DB via RegisterBloc or UserRepository
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text("User Created ✅")),
+                        final user = UserModel(
+                          id: widget.user?.id, // Use existing ID if editing
+                          shopName: 'Demo Shop',
+                          address: addressController.text,
+                          email: emailController.text,
+                          number: numberController.text,
+                          password: passwordController.text,
+                          role: selectedRole,
+                          status: selectedStatus,
+                          permissions: jsonEncode(permissions),
                         );
+
+                        final repo = UserRepository();
+                        await repo.init();
+
+                        if (widget.user == null) {
+                          await repo.registerUser(user);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("User Created ✅")),
+                          );
+                        } else {
+                          await repo.updateUser(user); // You'll define this
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("User Updated ✏️")),
+                          );
+                        }
+
+                        Navigator.pop(context); // Return to previous screen
                       }
                     },
                     child: const Padding(
@@ -162,10 +205,10 @@ class _AddUsersState extends State<AddUsers> {
         TableRow(
           decoration: BoxDecoration(color: Colors.blueGrey.shade50),
           children: const [
-            Padding(padding: EdgeInsets.all(8), child: Text('Module')),
-            Padding(padding: EdgeInsets.all(8), child: Text('View')),
-            Padding(padding: EdgeInsets.all(8), child: Text('Create')),
-            Padding(padding: EdgeInsets.all(8), child: Text('Edit')),
+              Padding(padding: EdgeInsets.all(8), child: Text('Module')),
+              Padding(padding: EdgeInsets.all(8), child: Text('View')),
+              Padding(padding: EdgeInsets.all(8), child: Text('Create')),
+              Padding(padding: EdgeInsets.all(8), child: Text('Edit')),
           ],
         ),
         ...modules.map((module) {

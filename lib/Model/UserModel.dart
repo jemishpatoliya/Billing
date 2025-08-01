@@ -5,7 +5,9 @@ class UserModel {
   String email;
   String number;
   String password;
-  String role; // ✅ Add this
+  String role;
+  String? status;
+  String? permissions; // JSON-encoded string
 
   UserModel({
     this.id,
@@ -15,6 +17,8 @@ class UserModel {
     required this.number,
     required this.password,
     required this.role,
+    this.status,
+    this.permissions,
   });
 
   Map<String, dynamic> toJson() => {
@@ -25,6 +29,8 @@ class UserModel {
     'number': number,
     'password': password,
     'role': role,
+    'status': status,
+    'permissions': permissions,
   };
 
   factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
@@ -34,6 +40,8 @@ class UserModel {
     email: json['email'],
     number: json['number'],
     password: json['password'],
-    role: json['role'], // ✅ Add this
+    role: json['role'],
+    status: json['status'],
+    permissions: json['permissions'],
   );
 }
