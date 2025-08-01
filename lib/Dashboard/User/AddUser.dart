@@ -1,8 +1,8 @@
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../Database/UserRepository.dart';
-import '../Model/UserModel.dart';
+import '../../Database/UserRepository.dart';
+import '../../Model/UserModel.dart';
 
 class AddUsers extends StatefulWidget {
   final UserModel? user;
@@ -18,6 +18,7 @@ class _AddUsersState extends State<AddUsers> {
   final passwordController = TextEditingController();
   final numberController = TextEditingController();
   final addressController = TextEditingController();
+  final usernameController = TextEditingController();
   String selectedRole = 'User';
 
   String selectedStatus = 'Active';
@@ -38,16 +39,57 @@ class _AddUsersState extends State<AddUsers> {
   ];
 
   Map<String, Map<String, bool>> permissions = {};
-
   @override
   void initState() {
     super.initState();
+
     for (var module in modules) {
       permissions[module] = {
         'View': false,
         'Create': false,
         'Edit': false,
       };
+    }
+
+    final existingUser = widget.user;
+    if (existingUser != null) {
+      emailController.text = existingUser.email;
+      passwordController.text = existingUser.password;
+      numberController.text = existingUser.number;
+      addressController.text = existingUser.address;
+      usernameController.text = existingUser?.username ?? '';
+      // 👇 Make sure the value is valid, fallback if not
+      if (['User', 'Admin'].contains(existingUser.role)) {
+        selectedRole = existingUser.role;
+      } else {
+        selectedRole = 'User'; // fallback
+      }
+
+      if (['Active', 'Inactive'].contains(existingUser.status)) {
+        selectedStatus = existingUser.status!;
+      } else {
+        selectedStatus = 'Active';
+      }
+
+      try {
+        final decodedPermissions = jsonDecode(existingUser.permissions ?? '{}');
+        for (var module in decodedPermissions.keys) {
+          if (permissions.containsKey(module)) {
+            final modulePerms = decodedPermissions[module];
+            for (var action in modulePerms.keys) {
+              if (permissions[module]!.containsKey(action)) {
+                permissions[module]![action] = modulePerms[action];
+              }
+            }
+          }
+        }
+
+        selectAll = permissions.values.every(
+              (perm) => perm.values.every((val) => val == true),
+        );
+      } catch (e) {
+        debugPrint("Permission decode error: $e");
+      }
     }
   }
 
@@ -75,10 +117,10 @@ class _AddUsersState extends State<AddUsers> {
   @override
   Widget build(BuildContext context) {
     final isLargeScreen = MediaQuery.of(context).size.width > 800;
-
     return Scaffold(
-      appBar: AppBar(title: Text("Add User")),
-      body: SingleChildScrollView(
+      appBar: AppBar(
+        title: Text(widget.user == null ? "Add User" : "Edit User"),
+      ), body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Form(
           key: _formKey,
@@ -88,6 +130,8 @@ class _AddUsersState extends State<AddUsers> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  buildInputField("User Name", usernameController, Icons.person),
+                  const SizedBox(height: 12),
                   buildInputField("Email", emailController, Icons.email),
                   const SizedBox(height: 12),
                   buildInputField("Password", passwordController, Icons.lock, obscure: true),
@@ -137,6 +181,7 @@ class _AddUsersState extends State<AddUsers> {
                         final user = UserModel(
                           id: widget.user?.id, // Use existing ID if editing
                           shopName: 'Demo Shop',
+                          username: usernameController.text,
                           address: addressController.text,
                           email: emailController.text,
                           number: numberController.text,
@@ -164,9 +209,9 @@ class _AddUsersState extends State<AddUsers> {
                         Navigator.pop(context); // Return to previous screen
                       }
                     },
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 14, horizontal: 24),
-                      child: Text("Submit", style: TextStyle(fontSize: 16)),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+                      child: Text(widget.user == null ? 'Add User' : 'Update User'),
                     ),
                   ),
                 ],

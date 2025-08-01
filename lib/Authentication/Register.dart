@@ -21,6 +21,7 @@ class _RegisterState extends State<Register> {
   final numberController = TextEditingController();
   final passController = TextEditingController();
   final confirmController = TextEditingController();
+  final userNameController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +55,7 @@ class _RegisterState extends State<Register> {
                 addressController.clear();
                 emailController.clear();
                 numberController.clear();
+                userNameController.clear();
                 passController.clear();
                 confirmController.clear();
                 Navigator.pushNamed(context, '/login');
@@ -93,6 +95,7 @@ class _RegisterState extends State<Register> {
                     ),
                     const SizedBox(height: 30),
                     _buildTextField(shopController, "Shop Name", Icons.store),
+                    _buildTextField(userNameController, "User Name", Icons.person),
                     _buildTextField(addressController, "Address", Icons.location_on),
                     _buildTextField(emailController, "Email", Icons.email,
                       inputType: TextInputType.emailAddress,
@@ -147,6 +150,7 @@ class _RegisterState extends State<Register> {
                           }
 
                           final user = UserModel(
+                            username: userNameController.text,
                             shopName: shopController.text,
                             address: addressController.text,
                             email: emailController.text,

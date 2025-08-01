@@ -85,6 +85,60 @@ class _SidebarState extends State<Sidebar> {
               ),
             ],
           ),
+          // Add this after the "Master" section in your ListView
+
+// Quotation Section
+          ExpansionTile(
+            leading: Icon(Icons.request_quote),
+            title: Text('Quotations'),
+            children: [
+              ListTile(
+                leading: Icon(Icons.note_add),
+                title: Text('Add Quotation'),
+                onTap: () => navCubit.changePage('add_quotation'),
+              ),
+              ListTile(
+                leading: Icon(Icons.list_alt),
+                title: Text('All Quotations'),
+                onTap: () => navCubit.changePage('all_quotations'),
+              ),
+            ],
+          ),
+          ExpansionTile(
+            leading: Icon(Icons.receipt_long),
+            title: Text('Invoices'),
+            children: [
+              ListTile(
+                leading: Icon(Icons.note_add_outlined),
+                title: Text('Add Invoice'),
+                onTap: () => navCubit.changePage('add_invoice'),
+              ),
+              ListTile(
+                leading: Icon(Icons.list),
+                title: Text('All Invoices'),
+                onTap: () => navCubit.changePage('all_invoices'),
+              ),
+            ],
+          ),
+
+          // Purchase Section
+          ExpansionTile(
+            leading: Icon(Icons.shopping_bag),
+            title: Text('Purchases'),
+            children: [
+              ListTile(
+                leading: Icon(Icons.add_shopping_cart),
+                title: Text('Add Purchase'),
+                onTap: () => navCubit.changePage('add_purchase'),
+              ),
+              ListTile(
+                leading: Icon(Icons.list_alt_outlined),
+                title: Text('All Purchases'),
+                onTap: () => navCubit.changePage('all_purchases'),
+              ),
+            ],
+          ),
+
         ],
       ),
     );

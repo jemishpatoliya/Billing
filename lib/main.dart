@@ -4,7 +4,8 @@ import 'Authentication/Register.dart';
 import 'Authentication/Login.dart';
 import 'Bloc/RegisterBloc.dart';
 import 'Bloc/nav_bloc.dart';
-import 'Dashboard/AddUser.dart';
+import 'Dashboard/Quotation/AddQuotation.dart';
+import 'Dashboard/User/AddUser.dart';
 import 'Dashboard/Dashboard.dart';
 import 'Database/UserRepository.dart';
 import 'Library/Widgets/sidebar.dart';
@@ -20,6 +21,18 @@ void main() async {
 
   final prefs = await SharedPreferences.getInstance();
   final loggedInEmail = prefs.getString('loggedInEmail');
+
+  bool isLoggedIn = false;
+
+  if (loggedInEmail != null) {
+    final existingUser = await userRepo.getUserByEmail(loggedInEmail);
+    if (existingUser != null) {
+      isLoggedIn = true;
+    } else {
+      // 👇 Remove stale email if user is deleted from DB
+      await prefs.remove('loggedInEmail');
+    }
+  }
 
   runApp(MyApp(userRepo, loggedInEmail != null));
 }
@@ -48,6 +61,7 @@ class MyApp extends StatelessWidget {
           '/register': (context) => Register(repository: userRepo),
           '/login': (context) => Login(repository: userRepo),
           '/dashboard': (context) => Dashboard(),
+          '/addQuotation': (context) => AddQuotation(),
           '/addUser': (context) {
             final user = ModalRoute.of(context)!.settings.arguments as UserModel?;
             return AddUsers(user: user);

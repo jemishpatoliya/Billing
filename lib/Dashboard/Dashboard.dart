@@ -1,13 +1,14 @@
+import 'package:Invoxel/Dashboard/Quotation/AddQuotation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../Bloc/nav_bloc.dart';
 import '../Library/Widgets/Topbar.dart';
 import '../Library/Widgets/sidebar.dart';
-
-import 'AddUser.dart';
-import 'AllUsers.dart';
+import 'Invoice/AddInvoice.dart';
+import 'User/AddUser.dart';
 import 'Customer.dart';
 import 'TransportPage.dart';
+import 'User/AllUsers.dart';
 
 
 class Dashboard extends StatelessWidget {
@@ -28,7 +29,7 @@ class Dashboard extends StatelessWidget {
                         case 'transport':
                           return TransportPage();
                         case 'customer':
-                          return Customer();
+                          return Customers();
                         // case 'supplier':
                         //   return SupplierPage();
                         // case 'app_parties':
@@ -39,6 +40,10 @@ class Dashboard extends StatelessWidget {
                           return Allusers();
                         case 'add_user':
                           return AddUsers();
+                        case 'add_quotation':
+                          return AddQuotation();
+                        case 'add_invoice':
+                          return AddInvoice();
                         default:
                           return Center(
                             child: Text(
