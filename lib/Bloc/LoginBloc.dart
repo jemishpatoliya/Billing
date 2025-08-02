@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../Database/UserRepository.dart';
+import '../Library/UserSession.dart';
 import '../Model/UserModel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -46,6 +47,9 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
     try {
       final user = await repository.loginUser(event.email, event.password);
       if (user != null) {
+        // Set user session with permissions here
+        UserSession.setLoggedInUser(user);
+
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('loggedInEmail', user.email ?? ''); // Save email
 

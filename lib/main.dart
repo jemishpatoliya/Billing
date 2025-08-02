@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'Authentication/Register.dart';
@@ -8,6 +10,7 @@ import 'Dashboard/Quotation/AddQuotation.dart';
 import 'Dashboard/User/AddUser.dart';
 import 'Dashboard/Dashboard.dart';
 import 'Database/UserRepository.dart';
+import 'Library/UserSession.dart';
 import 'Library/Widgets/sidebar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'Model/UserModel.dart';
@@ -20,6 +23,14 @@ void main() async {
   await userRepo.init(); // Initialize SQLite
 
   final prefs = await SharedPreferences.getInstance();
+
+  // Restore user session from JSON if saved
+  final userJson = prefs.getString('loggedInUserJson');
+  if (userJson != null) {
+    UserModel user = UserModel.fromJson(jsonDecode(userJson));
+    UserSession.setLoggedInUser(user);
+  }
+
   final loggedInEmail = prefs.getString('loggedInEmail');
 
   bool isLoggedIn = false;
@@ -28,13 +39,16 @@ void main() async {
     final existingUser = await userRepo.getUserByEmail(loggedInEmail);
     if (existingUser != null) {
       isLoggedIn = true;
+
+      // If you want, also update UserSession here with fresh DB data
+      UserSession.setLoggedInUser(existingUser);
     } else {
-      // 👇 Remove stale email if user is deleted from DB
       await prefs.remove('loggedInEmail');
+      await prefs.remove('loggedInUserJson'); // clear stale JSON also
     }
   }
 
-  runApp(MyApp(userRepo, loggedInEmail != null));
+  runApp(MyApp(userRepo, isLoggedIn));
 }
 
 

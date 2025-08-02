@@ -125,7 +125,7 @@ class _AddInvoiceState extends State<AddInvoice> {
   @override
   void initState() {
     super.initState();
-    print(UserSession.canEdit('Customer'));
+    print(UserSession.canEdit('Invoice'));
     paidAmountCtrl.addListener(() {
       setState(() {}); // updates unpaid amount preview as user types
     });
@@ -546,8 +546,9 @@ class _AddInvoiceState extends State<AddInvoice> {
                       Text("GST: ₹ ${getTotalAmount('gst_amount').toStringAsFixed(2)}"),
                       Text("Total: ₹ ${getTotalAmount('total').toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 10),
+                      // Only show button if user can either create or edit
                       Visibility(
-                        visible: UserSession.canEdit('Customer'),
+                        visible: UserSession.canEdit('Invoice') || UserSession.canCreate('Invoice'),
                         child: ElevatedButton(
                           onPressed: () async {
                             if (_formKey.currentState!.validate()) {
@@ -557,10 +558,21 @@ class _AddInvoiceState extends State<AddInvoice> {
                                 );
                                 return;
                               }
+
                               try {
-                                await saveInvoice();
+                                if (isEditMode && UserSession.canEdit('Invoice')) {
+                                  // Edit mode & user has edit permission
+                                  await saveInvoice(); // Your save function can internally check if updating or inserting
+                                } else if (!isEditMode && UserSession.canCreate('Invoice')) {
+                                  // Create mode & user has create permission
+                                  await saveInvoice();
+                                } else {
+                                  // No permission
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('You do not have permission to perform this action.')),
+                                  );
+                                }
                               } catch (e, stack) {
-                                // Print error to console
                                 print('Error saving invoice: $e\n$stack');
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(content: Text('Failed to save invoice: $e')),
@@ -570,7 +582,7 @@ class _AddInvoiceState extends State<AddInvoice> {
                           },
                           child: Text(isEditMode ? "Update Invoice" : "Save Invoice"),
                         ),
-                      ),
+                      )
                     ],
                   ),
                 ),

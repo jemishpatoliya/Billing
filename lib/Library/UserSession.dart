@@ -20,16 +20,26 @@ class UserSession {
     }
   }
 
-  // Permission checkers
+  static bool _isAdmin() {
+    return loggedInUser?.role == 'admin';
+  }
+
   static bool canView(String module) {
-    return userPermissions[module]?['View'] == true;
+    if (_isAdmin()) return true; // admin can view everything
+    final perms = userPermissions[module];
+    return perms != null && perms['View'] == true;
   }
 
   static bool canCreate(String module) {
-    return userPermissions[module]?['Create'] == true;
+    if (_isAdmin()) return true; // admin can create everything
+    final perms = userPermissions[module];
+    return perms != null && perms['Create'] == true;
   }
 
   static bool canEdit(String module) {
-    return userPermissions[module]?['Edit'] == true;
+    if (_isAdmin()) return true; // admin can edit everything
+    final perms = userPermissions[module];
+    return perms != null && perms['Edit'] == true;
   }
+
 }

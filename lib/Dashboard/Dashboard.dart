@@ -8,7 +8,6 @@ import '../Master/Customer.dart';
 import 'Invoice/AddInvoice.dart';
 import 'Invoice/AllInvoice.dart';
 import 'User/AddUser.dart';
-import 'Customer.dart';
 import '../Master/TransportPage.dart';
 import 'User/AllUsers.dart';
 
