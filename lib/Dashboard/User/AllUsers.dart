@@ -12,11 +12,17 @@ class Allusers extends StatefulWidget {
 
 class _AllusersState extends State<Allusers> {
   final userRepo = UserRepository();
-  List<UserModel> users = [];
+  List<UserModel> allUsers = [];
+  List<UserModel> displayedUsers = [];
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController mobileController = TextEditingController();
   String selectedStatus = 'All';
+
+  bool _isLoading = false;
+
+  int itemsPerPage = 10;
+  int currentMaxIndex = 10;
 
   @override
   void initState() {
@@ -26,24 +32,50 @@ class _AllusersState extends State<Allusers> {
     mobileController.addListener(filterUsers);
   }
 
-  bool _isLoading = false;
-
   Future<void> loadUsers() async {
-    await userRepo.init();
-    final allUsers = await userRepo.getAllUsers();
-    setState(() {
-      users = allUsers;
-    });
-  }
-
-  void filterUsers() async {
     setState(() => _isLoading = true);
 
     await userRepo.init();
-    List<UserModel> allUsers = await userRepo.getAllUsers();
+    allUsers = await userRepo.getAllUsers();
+
+    filterUsers();
+  }
+
+  void filterUsers() {
+    setState(() => _isLoading = true);
+
+    List<UserModel> filtered = allUsers.where((user) {
+      final nameMatch = nameController.text.isEmpty ||
+          user.shopName.toLowerCase().contains(nameController.text.toLowerCase());
+
+      final mobileMatch = mobileController.text.isEmpty ||
+          user.number.contains(mobileController.text);
+
+      final statusMatch = selectedStatus == 'All' ||
+          (user.status != null && user.status!.toLowerCase() == selectedStatus.toLowerCase());
+
+      return nameMatch && mobileMatch && statusMatch;
+    }).toList();
 
     setState(() {
-      users = allUsers.where((user) {
+      currentMaxIndex = itemsPerPage; // Reset pagination on new filter
+      displayedUsers = filtered.take(currentMaxIndex).toList();
+      _isLoading = false;
+    });
+  }
+
+  void resetFilters() {
+    nameController.clear();
+    mobileController.clear();
+    selectedStatus = 'All';
+    loadUsers();
+  }
+
+  void showMore() {
+    setState(() {
+      currentMaxIndex += itemsPerPage;
+
+      List<UserModel> filtered = allUsers.where((user) {
         final nameMatch = nameController.text.isEmpty ||
             user.shopName.toLowerCase().contains(nameController.text.toLowerCase());
 
@@ -55,19 +87,32 @@ class _AllusersState extends State<Allusers> {
 
         return nameMatch && mobileMatch && statusMatch;
       }).toList();
-      _isLoading = false;
-    });
-  }
 
-  void resetFilters() {
-    nameController.clear();
-    mobileController.clear();
-    selectedStatus = 'All';
-    loadUsers();  // will load all again
+      if (currentMaxIndex > filtered.length) {
+        currentMaxIndex = filtered.length;
+      }
+      displayedUsers = filtered.take(currentMaxIndex).toList();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    // Check if more users can be shown
+    List<UserModel> filteredUsers = allUsers.where((user) {
+      final nameMatch = nameController.text.isEmpty ||
+          user.shopName.toLowerCase().contains(nameController.text.toLowerCase());
+
+      final mobileMatch = mobileController.text.isEmpty ||
+          user.number.contains(mobileController.text);
+
+      final statusMatch = selectedStatus == 'All' ||
+          (user.status != null && user.status!.toLowerCase() == selectedStatus.toLowerCase());
+
+      return nameMatch && mobileMatch && statusMatch;
+    }).toList();
+
+    bool canShowMore = displayedUsers.length < filteredUsers.length;
+
     return Scaffold(
       appBar: AppBar(title: const Text('All Users')),
       body: RefreshIndicator(
@@ -124,7 +169,7 @@ class _AllusersState extends State<Allusers> {
                                 setState(() {
                                   selectedStatus = val!;
                                 });
-                                filterUsers(); // 🔁 Immediately filter when status changes
+                                filterUsers();
                               },
                             ),
                           ),
@@ -147,43 +192,53 @@ class _AllusersState extends State<Allusers> {
               ),
               const SizedBox(height: 16),
 
-              // 📄 User List Section
               Expanded(
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : users.isEmpty
+                    : displayedUsers.isEmpty
                     ? const Center(child: Text('No data found'))
-                    : SingleChildScrollView(
-                  child: DataTable(
-                    columns: const [
-                      DataColumn(label: Text("Name")),
-                      DataColumn(label: Text("Mobile")),
-                      DataColumn(label: Text("Email")),
-                      DataColumn(label: Text("Status")),
-                      DataColumn(label: Text("Entry By")),
-                      DataColumn(label: Text("Action")),
-                    ],
-                    rows: users.map((user) {
-                      return DataRow(cells: [
-                        DataCell(Text(user.shopName)),
-                        DataCell(Text(user.number)),
-                        DataCell(Text(user.email)),
-                        DataCell(Text(user.status??'')),
-                        DataCell(Text(user.role)),
-                        DataCell(
-                          IconButton(
-                            icon: const Icon(Icons.edit, size: 20),
-                            onPressed: () async {
-                              await Navigator.pushNamed(context, '/addUser', arguments: user);
-                              loadUsers();
-                            },
-                          ),
-                        ),
-                      ]);
-                    }).toList(),
-                  ),
-                ),
+                    : SizedBox(
+                  height: double.infinity,
+                  child: SingleChildScrollView(
+                        child: SingleChildScrollView(
+                                          child: DataTable(
+                        columns: const [
+                          DataColumn(label: Text("Name")),
+                          DataColumn(label: Text("Mobile")),
+                          DataColumn(label: Text("Email")),
+                          DataColumn(label: Text("Status")),
+                          DataColumn(label: Text("Entry By")),
+                          DataColumn(label: Text("Action")),
+                        ],
+                        rows: displayedUsers.map((user) {
+                          return DataRow(cells: [
+                            DataCell(Text(user.shopName)),
+                            DataCell(Text(user.number)),
+                            DataCell(Text(user.email)),
+                            DataCell(Text(user.status ?? '')),
+                            DataCell(Text(user.role)),
+                            DataCell(
+                              IconButton(
+                                icon: const Icon(Icons.edit, size: 20),
+                                onPressed: () async {
+                                  await Navigator.pushNamed(context, '/addUser', arguments: user);
+                                  loadUsers();
+                                },
+                              ),
+                            ),
+                          ]);
+                        }).toList(),
+                                          ),
+                                        ),
+                      ),
+                    ),
               ),
+
+              if (!_isLoading && canShowMore)
+                ElevatedButton(
+                  onPressed: showMore,
+                  child: const Text("Show More"),
+                ),
             ],
           ),
         ),

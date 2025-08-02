@@ -4,12 +4,16 @@ import '../Model/UserModel.dart';
 
 class UserRepository {
   late Database _db;
+  bool _isInitialized = false;
+  static final UserRepository _instance = UserRepository._internal();
+  factory UserRepository() => _instance;
+  UserRepository._internal();
 
   Future<void> init() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
 
-    _db = await databaseFactory.openDatabase('app_data.db');
+    _db = await databaseFactory.openDatabase('Invoxel.db');
 
     // User table (keep as is)
     await _db.execute('''
@@ -34,6 +38,8 @@ class UserRepository {
         your_firm TEXT,
         customer_name TEXT,
         customer_firm TEXT,
+        customer_mobile TEXT,
+        customer_address TEXT,
         date TEXT,
         is_gst INTEGER,
         invoice_no TEXT,
@@ -44,9 +50,13 @@ class UserRepository {
         discount REAL,
         subtotal REAL,
         tax REAL,
-        total REAL
+        total REAL,
+        paid_amount REAL,
+        unpaid_amount REAL,
+        gst_number TEXT
       );
     ''');
+    _isInitialized = true;
   }
 
   // User functions
@@ -97,8 +107,16 @@ class UserRepository {
   }
 
   Future<List<InvoiceModel>> getAllInvoices() async {
-    final result = await _db.query('invoices');
-    return result.map((row) => InvoiceModel.fromJson(row)).toList();
+    final result = await _db.query('invoices', orderBy: "id DESC");
+    return result.map((map) => InvoiceModel.fromMap(map)).toList();
+  }
+  Future<void> updateInvoice(InvoiceModel invoice) async {
+    await _db.update(
+      'invoices',
+      invoice.toJson(),
+      where: 'id = ?',
+      whereArgs: [invoice.id],
+    );
   }
 
 }

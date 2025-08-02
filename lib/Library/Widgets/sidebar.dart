@@ -116,7 +116,7 @@ class _SidebarState extends State<Sidebar> {
               ListTile(
                 leading: Icon(Icons.list),
                 title: Text('All Invoices'),
-                onTap: () => navCubit.changePage('all_invoices'),
+                onTap: () => navCubit.changePage('all_invoice'),
               ),
             ],
           ),

@@ -43,6 +43,8 @@ dev_dependencies:
   equatable: ^2.0.7
   shared_preferences: ^2.5.3
   intl: ^0.18.1
+  url_launcher: ^6.1.7
+  url_launcher_windows: ^3.1.4
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
