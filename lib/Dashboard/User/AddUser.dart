@@ -19,7 +19,7 @@ class _AddUsersState extends State<AddUsers> {
   final numberController = TextEditingController();
   final addressController = TextEditingController();
   final usernameController = TextEditingController();
-  String selectedRole = 'User';
+  String selectedRole = 'user';
 
   String selectedStatus = 'Active';
   bool selectAll = false;
@@ -58,11 +58,16 @@ class _AddUsersState extends State<AddUsers> {
       numberController.text = existingUser.number;
       addressController.text = existingUser.address;
       usernameController.text = existingUser?.username ?? '';
-      // 👇 Make sure the value is valid, fallback if not
-      if (['User', 'Admin'].contains(existingUser.role)) {
-        selectedRole = existingUser.role;
+
+      if (existingUser.role != null) {
+        final role = existingUser.role!.trim().toLowerCase();
+        if (role == 'admin' || role == 'user') {
+          selectedRole = role;
+        } else {
+          selectedRole = 'user';
+        }
       } else {
-        selectedRole = 'User'; // fallback
+        selectedRole = 'user';
       }
 
       if (['Active', 'Inactive'].contains(existingUser.status)) {
@@ -92,6 +97,7 @@ class _AddUsersState extends State<AddUsers> {
       }
     }
   }
+
 
   void toggleSelectAll(bool? value) {
     setState(() {
@@ -130,15 +136,44 @@ class _AddUsersState extends State<AddUsers> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  buildInputField("User Name", usernameController, Icons.person),
+                  buildInputField(
+                    "User Name",
+                    usernameController,
+                    Icons.person,
+                    validator: (val) => validateRequired(val, "User Name"),
+                  ),
                   const SizedBox(height: 12),
-                  buildInputField("Email", emailController, Icons.email),
+                  buildInputField(
+                    "Email",
+                    emailController,
+                    Icons.email,
+                    keyboardType: TextInputType.emailAddress,
+                    validator: validateEmail,
+                  ),
                   const SizedBox(height: 12),
-                  buildInputField("Password", passwordController, Icons.lock, obscure: true),
+                  buildInputField(
+                    "Password",
+                    passwordController,
+                    Icons.lock,
+                    obscure: true,
+                    validator: validatePassword,
+                  ),
                   const SizedBox(height: 12),
-                  buildInputField("Number", numberController, Icons.phone),
+                  buildInputField(
+                    "Number",
+                    numberController,
+                    Icons.phone,
+                    keyboardType: TextInputType.phone,
+                    validator: validateMobile,
+                  ),
                   const SizedBox(height: 12),
-                  buildInputField("Address", addressController, Icons.home),
+                  buildInputField(
+                    "Address",
+                    addressController,
+                    Icons.home,
+                    validator: (val) => validateRequired(val, "Address"),
+                  ),
+
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     decoration: InputDecoration(
@@ -146,8 +181,11 @@ class _AddUsersState extends State<AddUsers> {
                       border: OutlineInputBorder(),
                     ),
                     value: selectedRole,
-                    items: ['User', 'Admin'].map((role) {
-                      return DropdownMenuItem(value: role, child: Text(role));
+                    items: ['user', 'admin'].map((role) {
+                      return DropdownMenuItem(
+                        value: role,
+                        child: Text(role[0].toUpperCase() + role.substring(1)),
+                      );
                     }).toList(),
                     onChanged: (val) => setState(() => selectedRole = val!),
                   ),
@@ -196,17 +234,17 @@ class _AddUsersState extends State<AddUsers> {
 
                         if (widget.user == null) {
                           await repo.registerUser(user);
+                          Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text("User Created ✅")),
                           );
                         } else {
-                          await repo.updateUser(user); // You'll define this
+                          await repo.updateUser(user);
+                          Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text("User Updated ✏️")),
                           );
                         }
-
-                        Navigator.pop(context); // Return to previous screen
                       }
                     },
                     child: Padding(
@@ -223,19 +261,55 @@ class _AddUsersState extends State<AddUsers> {
     );
   }
 
-  Widget buildInputField(String label, TextEditingController controller, IconData icon,
-      {bool obscure = false}) {
+// Helper functions for validation
+  String? validateEmail(String? val) {
+    if (val == null || val.isEmpty) return "Enter Email";
+    // Basic email regex
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+    if (!emailRegex.hasMatch(val)) return "Enter valid email";
+    return null;
+  }
+
+  String? validatePassword(String? val) {
+    if (val == null || val.isEmpty) return "Enter Password";
+    if (val.length < 6) return "Password must be at least 6 characters";
+    return null;
+  }
+
+  String? validateMobile(String? val) {
+    if (val == null || val.isEmpty) return "Enter Mobile Number";
+    final digitOnly = RegExp(r'^\d{10}$');
+    if (!digitOnly.hasMatch(val)) return "Mobile must be exactly 10 digits";
+    return null;
+  }
+
+  String? validateRequired(String? val, String fieldName) {
+    if (val == null || val.isEmpty) return "Enter $fieldName";
+    return null;
+  }
+
+// Updated buildInputField with validator parameter
+  Widget buildInputField(
+      String label,
+      TextEditingController controller,
+      IconData icon, {
+        bool obscure = false,
+        String? Function(String?)? validator,
+        TextInputType keyboardType = TextInputType.text,
+      }) {
     return TextFormField(
       controller: controller,
       obscureText: obscure,
+      keyboardType: keyboardType,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon),
         border: OutlineInputBorder(),
       ),
-      validator: (val) => val == null || val.isEmpty ? "Enter $label" : null,
+      validator: validator ?? (val) => validateRequired(val, label),
     );
   }
+
 
   Widget buildPermissionTable() {
     return Table(

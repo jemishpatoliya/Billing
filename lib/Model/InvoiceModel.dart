@@ -1,93 +1,129 @@
 class InvoiceModel {
   int? id;
-  String yourFirm;
-  String customerName;
-  String customerFirm;
-  String customerMobile;
-  String customerAddress;
-  String date;
-  int isGst;
   String invoiceNo;
-  String shipTo;
-  String transport;
-  String productDetails;
-  double amount;
-  double discount;
+  String date;
+  String yourFirm;
+  String yourFirmAddress;
+  String buyerName;
+  String buyerAddress;
+  String placeOfSupply;
+  String gstinSupplier;
+  String gstinBuyer;
+  String? poNumber;
+  String? mobileNo;
+  String productDetails; // JSON-encoded list of items
   double subtotal;
-  double tax;
+  double cgst;
+  double sgst;
+  double totalGst;
   double total;
-  double paidAmount;
-  double unpaidAmount;
-  final String? gstNumber;  // Add this field
+  double roundedTotal;
+  String totalInWords;
+  String? bankName;
+  String? accountNumber;
+  String? ifscCode;
+  String? transport;
+  String? termsConditions;
+  String? jurisdiction;
+  String? signature;
+  final String? hsnSac;
+  final String? mm;
 
   InvoiceModel({
     this.id,
-    required this.yourFirm,
-    required this.customerName,
-    required this.customerFirm,
-    required this.customerMobile,
-    required this.customerAddress,
-    required this.date,
-    required this.isGst,
     required this.invoiceNo,
-    required this.shipTo,
-    required this.transport,
+    required this.date,
+    required this.yourFirm,
+    required this.yourFirmAddress,
+    required this.buyerName,
+    required this.buyerAddress,
+    required this.placeOfSupply,
+    required this.gstinSupplier,
+    required this.gstinBuyer,
+    this.poNumber,
+    this.mobileNo,
     required this.productDetails,
-    required this.amount,
-    required this.discount,
     required this.subtotal,
-    required this.tax,
+    required this.cgst,
+    required this.sgst,
+    required this.totalGst,
     required this.total,
-    required this.paidAmount,
-    required this.unpaidAmount,
-    this.gstNumber,
+    required this.roundedTotal,
+    required this.totalInWords,
+    this.bankName,
+    this.accountNumber,
+    this.ifscCode,
+    this.transport,
+    this.termsConditions,
+    this.jurisdiction,
+    this.signature,
+    this.hsnSac,   // new
+    this.mm,
   });
 
   Map<String, dynamic> toJson() => {
     'id': id,
-    'your_firm': yourFirm,
-    'customer_name': customerName,
-    'customer_firm': customerFirm,
-    'customer_mobile': customerMobile,
-    'customer_address': customerAddress,
-    'date': date,
-    'is_gst': isGst,
     'invoice_no': invoiceNo,
-    'ship_to': shipTo,
-    'transport': transport,
+    'date': date,
+    'your_firm': yourFirm,
+    'your_firm_address': yourFirmAddress,
+    'buyer_name': buyerName,
+    'buyer_address': buyerAddress,
+    'place_of_supply': placeOfSupply,
+    'gstin_supplier': gstinSupplier,
+    'gstin_buyer': gstinBuyer,
+    'po_number': poNumber,
+    'mobile_no': mobileNo,
     'product_details': productDetails,
-    'amount': amount,
-    'discount': discount,
     'subtotal': subtotal,
-    'tax': tax,
+    'cgst': cgst,
+    'sgst': sgst,
+    'total_gst': totalGst,
     'total': total,
-    'paid_amount': paidAmount,
-    'unpaid_amount': unpaidAmount,
-    'gst_number': gstNumber,
+    'rounded_total': roundedTotal,
+    'total_in_words': totalInWords,
+    'bank_name': bankName,
+    'account_number': accountNumber,
+    'ifsc_code': ifscCode,
+    'transport': transport,
+    'terms_conditions': termsConditions,
+    'jurisdiction': jurisdiction,
+    'signature': signature,
+    'hsnSac': hsnSac,  // new
+    'mm': mm,          // new
   };
 
   factory InvoiceModel.fromMap(Map<String, dynamic> map) {
     return InvoiceModel(
       id: map['id'],
-      yourFirm: map['your_firm'],
-      customerName: map['customer_name'],
-      customerFirm: map['customer_firm'],
-      customerMobile: map['customer_mobile'],
-      customerAddress: map['customer_address'],
-      date: map['date'],
-      isGst: map['is_gst'],
       invoiceNo: map['invoice_no'],
-      shipTo: map['ship_to'],
-      transport: map['transport'],
+      date: map['date'],
+      yourFirm: map['your_firm'],
+      yourFirmAddress: map['your_firm_address'],
+      buyerName: map['buyer_name'],
+      buyerAddress: map['buyer_address'],
+      placeOfSupply: map['place_of_supply'],
+      gstinSupplier: map['gstin_supplier'],
+      gstinBuyer: map['gstin_buyer'],
+      poNumber: map['po_number'],
+      mobileNo: map['mobile_no'],
       productDetails: map['product_details'],
-      amount: map['amount'] * 1.0,
-      discount: map['discount'] * 1.0,
       subtotal: map['subtotal'] * 1.0,
-      tax: map['tax'] * 1.0,
+      cgst: map['cgst'] * 1.0,
+      sgst: map['sgst'] * 1.0,
+      totalGst: map['total_gst'] * 1.0,
       total: map['total'] * 1.0,
-      paidAmount: map['paid_amount'] * 1.0,
-      unpaidAmount: map['unpaid_amount'] * 1.0,
-      gstNumber: map['gst_number'],
+      roundedTotal: map['rounded_total'] * 1.0,
+      totalInWords: map['total_in_words'],
+      bankName: map['bank_name'],
+      accountNumber: map['account_number'],
+      ifscCode: map['ifsc_code'],
+      transport: map['transport'],
+      termsConditions: map['terms_conditions'],
+      jurisdiction: map['jurisdiction'],
+      signature: map['signature'],
+      hsnSac: map['hsnSac'],   // new
+      mm: map['mm'],
     );
   }
 }

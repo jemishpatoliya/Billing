@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 
+import 'package:flutter/material.dart';
 import '../../Database/UserRepository.dart';
 import '../../Model/UserModel.dart';
 
@@ -93,6 +93,37 @@ class _AllusersState extends State<Allusers> {
       }
       displayedUsers = filtered.take(currentMaxIndex).toList();
     });
+  }
+
+  Future<void> deleteUser(int id) async {
+    // Show confirmation dialog
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Delete'),
+        content: const Text('Are you sure you want to delete this user?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await userRepo.init();
+      await userRepo.deleteUser(id);  // Make sure your UserRepository has this method
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User deleted ❌')),
+      );
+      loadUsers(); // Reload users after delete
+    }
   }
 
   @override
@@ -190,6 +221,16 @@ class _AllusersState extends State<Allusers> {
                   ),
                 ),
               ),
+              // Row(
+              //   mainAxisAlignment: MainAxisAlignment.end,
+              //   children: [
+              //     ElevatedButton.icon(
+              //       icon: const Icon(Icons.download),
+              //       label: const Text("Download Excel"),
+              //       onPressed: exportUsersToCSV,
+              //     ),
+              //   ],
+              // ),
               const SizedBox(height: 16),
 
               Expanded(
@@ -218,12 +259,21 @@ class _AllusersState extends State<Allusers> {
                             DataCell(Text(user.status ?? '')),
                             DataCell(Text(user.role)),
                             DataCell(
-                              IconButton(
-                                icon: const Icon(Icons.edit, size: 20),
-                                onPressed: () async {
-                                  await Navigator.pushNamed(context, '/addUser', arguments: user);
-                                  loadUsers();
-                                },
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit, size: 20),
+                                    onPressed: () async {
+                                      await Navigator.pushNamed(context, '/addUser', arguments: user);
+                                      loadUsers();
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                                    onPressed: () => deleteUser(user.id!),
+                                    tooltip: 'Delete User',
+                                  ),
+                                ],
                               ),
                             ),
                           ]);

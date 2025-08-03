@@ -1,596 +1,581 @@
-import 'dart:convert';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
-import '../../Database/UserRepository.dart';
-import '../../Library/UserSession.dart';
-import '../../Model/InvoiceModel.dart';
+  import 'dart:convert';
+  import 'package:flutter/material.dart';
+  import 'package:flutter/services.dart';
+  import 'package:intl/intl.dart';
+  import '../../Database/UserRepository.dart';
+  import '../../Library/UserSession.dart';
+  import '../../Model/InvoiceModel.dart';
+  import 'AllInvoice.dart';
 
-class AddInvoice extends StatefulWidget {
-  final InvoiceModel? invoiceToEdit; // Add this line
-  const AddInvoice({Key? key, this.invoiceToEdit}) : super(key: key);
+  class AddInvoice extends StatefulWidget {
+    final InvoiceModel? invoiceToEdit;
+    const AddInvoice({Key? key, this.invoiceToEdit}) : super(key: key);
 
-  @override
-  State<AddInvoice> createState() => _AddInvoiceState();
-}
-
-class _AddInvoiceState extends State<AddInvoice> {
-  final _formKey = GlobalKey<FormState>();
-  final repo = UserRepository();
-
-  final TextEditingController customerCtrl = TextEditingController();
-  final TextEditingController customerFirmCtrl = TextEditingController();
-  final TextEditingController dateCtrl = TextEditingController(
-      text: DateFormat("dd/MM/yyyy").format(DateTime.now()));
-  final TextEditingController invoiceNoCtrl = TextEditingController(text: "2024-2500002");
-  final TextEditingController shipToCtrl = TextEditingController();
-  final TextEditingController transportCtrl = TextEditingController();
-  final TextEditingController customerMobileCtrl = TextEditingController();
-  final TextEditingController customerAddressCtrl = TextEditingController();
-  final TextEditingController paidAmountCtrl = TextEditingController(text: "0");
-  final TextEditingController gstNumberCtrl = TextEditingController();
-
-  final List<String> transportOptions = ['Road', 'Air', 'Sea', 'Courier', 'Other'];
-  String selectedTransport = '';
-
-  String selectedFirm = "MAHADEV ENTERPRISE";
-  String gstValue = "Yes";
-
-  List<Map<String, dynamic>> products = [];
-  bool get isEditMode => widget.invoiceToEdit != null;
-  void addEmptyProductRow() {
-    setState(() {
-      products.add({
-        "product": "",
-        "desc": "",
-        "price": 0.0,
-        "qty": 1,
-        "discount_percent": 0.0,
-        "discount_amount": 0.0,
-        "gst_percent": 0.0,
-        "gst_amount": 0.0,
-        "subtotal": 0.0,
-        "total": 0.0,
-      });
-    });
+    @override
+    State<AddInvoice> createState() => _AddInvoiceState();
   }
 
-  void updateProductCalculation(int index) {
-    final item = products[index];
-    double amount = (item['price'] ?? 0) * (item['qty'] ?? 1);
-    double discountAmt = amount * ((item['discount_percent'] ?? 0) / 100);
-    double net = amount - discountAmt;
-    double gstAmt = net * ((item['gst_percent'] ?? 0) / 100);
-    double total = net + gstAmt;
+  class _AddInvoiceState extends State<AddInvoice> {
+    final _formKey = GlobalKey<FormState>();
+    final repo = UserRepository();
 
-    setState(() {
-      item['discount_amount'] = discountAmt;
-      item['gst_amount'] = gstAmt;
-      item['subtotal'] = net;
-      item['total'] = total;
-    });
-  }
-
-  double getTotalAmount(String key) {
-    return products.fold<double>(
-      0.0,
-          (sum, item) {
-        final val = item[key];
-        if (val == null) return sum;
-        if (val is int) return sum + val.toDouble();
-        if (val is double) return sum + val;
-        return sum;
-      },
+    // Controllers for InvoiceModel fields
+    final TextEditingController invoiceNoCtrl = TextEditingController();
+    final TextEditingController dateCtrl = TextEditingController(
+      text: DateFormat("dd/MM/yyyy").format(DateTime.now()),
     );
-  }
-  Future<void> saveInvoice() async {
-
-    final paidAmt = double.tryParse(paidAmountCtrl.text) ?? 0.0;
-    final totalAmount = getTotalAmount('total');  // this returns num
-    final unpaidAmt = (totalAmount - paidAmt).clamp(0, double.infinity);
-
-    final invoice = InvoiceModel(
-      id: isEditMode ? widget.invoiceToEdit!.id : null, // ✅ Preserve the ID for update
-      yourFirm: selectedFirm,
-      customerName: customerCtrl.text,
-      customerFirm: customerFirmCtrl.text,
-      customerMobile: customerMobileCtrl.text,
-      customerAddress: customerAddressCtrl.text,
-      date: dateCtrl.text,
-      isGst: gstValue == "Yes" ? 1 : 0,
-      invoiceNo: invoiceNoCtrl.text,
-      shipTo: shipToCtrl.text,
-      transport: selectedTransport,
-      productDetails: jsonEncode(products),
-      amount: getTotalAmount('price'),
-      discount: getTotalAmount('discount_amount'),
-      subtotal: getTotalAmount('subtotal'),
-      tax: getTotalAmount('gst_amount'),
-      total: getTotalAmount('total'),
-      paidAmount: paidAmt,
-      unpaidAmount: unpaidAmt.toDouble(),
-      gstNumber: gstValue == "Yes" ? gstNumberCtrl.text : null,
+    final TextEditingController yourFirmCtrl = TextEditingController();
+    final TextEditingController yourFirmAddressCtrl = TextEditingController();
+    final TextEditingController buyerNameCtrl = TextEditingController();
+    final TextEditingController buyerAddressCtrl = TextEditingController();
+    final TextEditingController placeOfSupplyCtrl = TextEditingController();
+    final TextEditingController gstinSupplierCtrl = TextEditingController();
+    final TextEditingController gstinBuyerCtrl = TextEditingController();
+    final TextEditingController poNumberCtrl = TextEditingController();
+    final TextEditingController mobileNoCtrl = TextEditingController();
+    final TextEditingController bankNameCtrl = TextEditingController();
+    final TextEditingController accountNumberCtrl = TextEditingController();
+    final TextEditingController ifscCodeCtrl = TextEditingController();
+    final TextEditingController transportCtrl = TextEditingController();
+    final TextEditingController termsCtrl = TextEditingController();
+    final TextEditingController jurisdictionCtrl = TextEditingController();
+    final TextEditingController signatureCtrl = TextEditingController();
+    final TextEditingController hsnSacCtrl = TextEditingController();
+    final TextEditingController mmCtrl = TextEditingController();
+    bool useGST = true;
+    final TextEditingController gstPercentCtrl = TextEditingController(
+      text: "18",
+    );
+    final TextEditingController discountPercentCtrl = TextEditingController(
+      text: "0",
     );
 
-    if (isEditMode) {
-      await repo.updateInvoice(invoice); // You need to add this method in your repo
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Invoice Updated")));
-    } else {
-      await repo.addInvoice(invoice);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Invoice Saved")));
-    }
-    Navigator.pop(context, true); // Return true to indicate saved/updated
-  }
+    List<Map<String, dynamic>> products = [];
 
-  @override
-  void initState() {
-    super.initState();
-    print(UserSession.canEdit('Invoice'));
-    paidAmountCtrl.addListener(() {
-      setState(() {}); // updates unpaid amount preview as user types
-    });
-    if (isEditMode) {
-      final invoice = widget.invoiceToEdit!;
-      customerCtrl.text = invoice.customerName;
-      customerFirmCtrl.text = invoice.customerFirm;
-      customerMobileCtrl.text = invoice.customerMobile;
-      customerAddressCtrl.text = invoice.customerAddress;
-      dateCtrl.text = invoice.date;
-      invoiceNoCtrl.text = invoice.invoiceNo;
-      shipToCtrl.text = invoice.shipTo;
-      selectedTransport = invoice.transport;
-      gstValue = invoice.isGst == 1 ? "Yes" : "No";
-      gstNumberCtrl.text = invoice.gstNumber ?? "";
-      paidAmountCtrl.text = invoice.paidAmount.toString();
+    bool get isEditMode => widget.invoiceToEdit != null;
 
-      // Decode and assign product details
-      if (invoice.productDetails.isNotEmpty) {
-        setState(() {
-          products = List<Map<String, dynamic>>.from(jsonDecode(invoice.productDetails));
-          for (int i = 0; i < products.length; i++) {
-            updateProductCalculation(i);
-          }
-        });
-      }
-      else {
-        print("Empty");
+    @override
+    void initState() {
+      super.initState();
+
+      if (isEditMode) {
+        final inv = widget.invoiceToEdit!;
+        invoiceNoCtrl.text = inv.invoiceNo;
+        dateCtrl.text = inv.date;
+        yourFirmCtrl.text = inv.yourFirm;
+        yourFirmAddressCtrl.text = inv.yourFirmAddress;
+        buyerNameCtrl.text = inv.buyerName;
+        buyerAddressCtrl.text = inv.buyerAddress;
+        placeOfSupplyCtrl.text = inv.placeOfSupply;
+        gstinSupplierCtrl.text = inv.gstinSupplier;
+        gstinBuyerCtrl.text = inv.gstinBuyer;
+        poNumberCtrl.text = inv.poNumber ?? '';
+        mobileNoCtrl.text = inv.mobileNo ?? '';
+        bankNameCtrl.text = inv.bankName ?? '';
+        accountNumberCtrl.text = inv.accountNumber ?? '';
+        ifscCodeCtrl.text = inv.ifscCode ?? '';
+        transportCtrl.text = inv.transport ?? '';
+        termsCtrl.text = inv.termsConditions ?? '';
+        jurisdictionCtrl.text = inv.jurisdiction ?? '';
+        signatureCtrl.text = inv.signature ?? '';
+        products = List<Map<String, dynamic>>.from(
+          jsonDecode(inv.productDetails),
+        );
+        hsnSacCtrl.text = inv.hsnSac ?? '';
+        mmCtrl.text = inv.mm ?? '';
+      } else {
         products = [];
       }
-    } else {
-      // Default date and empty product list
-      dateCtrl.text = DateFormat("dd/MM/yyyy").format(DateTime.now());
-      products = [];
-    }
-    loadCustomerNames();
-  }
-  List<String> existingCustomerNames = [];
-  bool isLoadingCustomers = true;
-
-  String? selectedCustomerName;
-
-  Future<void> loadCustomerNames() async {
-    await repo.init();
-    final allInvoices = await repo.getAllInvoices();
-
-    final namesSet = <String>{};
-    for (var inv in allInvoices) {
-      if (inv.customerName.isNotEmpty) {
-        namesSet.add(inv.customerName);
-      }
     }
 
-    setState(() {
-      existingCustomerNames = namesSet.toList()..sort();
-      isLoadingCustomers = false;
+    // Add new product row
+    void addEmptyProduct() {
+      double gstPercent = double.tryParse(gstPercentCtrl.text) ?? 0.0;
+      double discountPercent = double.tryParse(discountPercentCtrl.text) ?? 0.0;
 
-      // Optional: if editing invoice, set selectedCustomerName to existing customer
+      setState(() {
+        products.add({
+          "product": "",
+          "desc": "",
+          "price": 0.0,
+          "qty": 1,
+          "discount_percent": discountPercent,
+          "discount_amount": 0.0,
+          "gst_percent": useGST ? gstPercent : 0.0,
+          "gst_amount": 0.0,
+          "cgst": 0.0,
+          "sgst": 0.0,
+          "subtotal": 0.0,
+          "total": 0.0,
+        });
+      });
+    }
+
+    // Update calculations for product row
+    void updateProduct(int index) {
+      final p = products[index];
+      double amount = (p['price'] ?? 0) * (p['qty'] ?? 1);
+      double discountPercent = p['discount_percent'] ?? 0.0;
+      double gstPercent = p['gst_percent'] ?? 0.0;
+
+      double dis = amount * (discountPercent / 100);
+      double net = amount - dis;
+      double gst = net * (gstPercent / 100);
+      double cgst = gst / 2;
+      double sgst = gst / 2;
+      double total = net + gst;
+
+      setState(() {
+        p['discount_amount'] = dis;
+        p['gst_amount'] = gst;
+        p['cgst'] = cgst;
+        p['sgst'] = sgst;
+        p['subtotal'] = net;
+        p['total'] = total;
+      });
+    }
+
+    double getTotal(String key) {
+      return products.fold(0.0, (sum, p) => sum + (p[key] ?? 0.0));
+    }
+
+    // Save Invoice (Create or Edit)
+    Future<void> saveInvoice() async {
+      final subtotal = getTotal('subtotal');
+      final gst = getTotal('gst_amount');
+      final cgst = gst / 2;
+      final sgst = gst / 2;
+      final total = getTotal('total');
+      final roundedTotal = total.roundToDouble();
+
+      final model = InvoiceModel(
+        id: isEditMode ? widget.invoiceToEdit!.id : null, // 👈 Important
+        invoiceNo: invoiceNoCtrl.text,
+        date: dateCtrl.text,
+        yourFirm: yourFirmCtrl.text,
+        yourFirmAddress: yourFirmAddressCtrl.text,
+        buyerName: buyerNameCtrl.text,
+        buyerAddress: buyerAddressCtrl.text,
+        placeOfSupply: placeOfSupplyCtrl.text,
+        gstinSupplier: gstinSupplierCtrl.text,
+        gstinBuyer: gstinBuyerCtrl.text,
+        poNumber: poNumberCtrl.text,
+        mobileNo: mobileNoCtrl.text,
+        productDetails: jsonEncode(products),
+        subtotal: subtotal,
+        cgst: cgst,
+        sgst: sgst,
+        totalGst: gst,
+        total: total,
+        roundedTotal: roundedTotal,
+        totalInWords: "",
+        bankName: bankNameCtrl.text,
+        accountNumber: accountNumberCtrl.text,
+        ifscCode: ifscCodeCtrl.text,
+        transport: transportCtrl.text,
+        termsConditions: termsCtrl.text,
+        jurisdiction: jurisdictionCtrl.text,
+        signature: signatureCtrl.text,
+        hsnSac: hsnSacCtrl.text,   // new
+        mm: mmCtrl.text,
+      );
+
       if (isEditMode) {
-        selectedCustomerName = widget.invoiceToEdit?.customerName;
-        customerCtrl.text = selectedCustomerName ?? '';
-      }
-    });
-  }
-  bool validateDate() {
-    if (dateCtrl.text.isEmpty) return false;
-
-    try {
-      final inputDate = DateFormat("dd/MM/yyyy").parseStrict(dateCtrl.text);
-      final today = DateTime.now();
-
-      if (isEditMode) {
-        final originalDate = DateFormat("dd/MM/yyyy").parseStrict(widget.invoiceToEdit!.date);
-        // inputDate >= originalDate && inputDate <= today
-        if (inputDate.isBefore(originalDate)) return false;
-        if (inputDate.isAfter(today)) return false;
+        await repo.updateInvoice(model);
       } else {
-        // For new invoice, inputDate >= today
-        final inputDateOnly = DateTime(inputDate.year, inputDate.month, inputDate.day);
-        final todayOnly = DateTime(today.year, today.month, today.day);
-        if (inputDateOnly.isBefore(todayOnly)) return false;
+        await repo.addInvoice(model);
       }
-
-      return true;
-    } catch (_) {
-      return false;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isEditMode ? 'Invoice updated successfully' : 'Invoice added successfully'),
+          ),
+        );
+        Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+      }
     }
-  }
-  bool validateProducts() {
-    if (products.isEmpty) return false;
-    for (var p in products) {
-      if ((p['product'] ?? '').toString().trim().isEmpty) return false;
-      if ((p['price'] == null) || (p['price'] is! num) || (p['price'] <= 0)) return false;
-      if ((p['qty'] == null) || (p['qty'] is! int) || (p['qty'] <= 0)) return false;
-      if ((p['discount_percent'] == null) || (p['discount_percent'] is! num) || (p['discount_percent'] < 0)) return false;
-      if ((p['gst_percent'] == null) || (p['gst_percent'] is! num) || (p['gst_percent'] < 0)) return false;
-    }
-    return true;
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(isEditMode ? "Edit Invoice" : "Add Invoice")),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
+    @override
+    Widget build(BuildContext context) {
+      return Scaffold(
+        appBar: AppBar(title: Text(isEditMode ? "Update Invoice" : "Add Invoice")),
+        body: Form(
           key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
             children: [
-              // Basic Details
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      const Text("Basic Details", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      DropdownButtonFormField<String>(
-                        value: selectedFirm,
-                        items: ["MAHADEV ENTERPRISE", "XYZ FIRM"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                        onChanged: (val) => setState(() => selectedFirm = val!),
-                        decoration: const InputDecoration(labelText: "Your Firm"),
-                      ),
-                      DropdownButtonFormField<String>(
-                        value: selectedCustomerName,
-                        decoration: const InputDecoration(labelText: "Customer"),
-                        items: existingCustomerNames.map((name) {
-                          return DropdownMenuItem(
-                            value: name,
-                            child: Text(name),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          setState(() {
-                            selectedCustomerName = val;
-
-                            if (val != null && val.isNotEmpty) {
-                              customerCtrl.text = val;
-                            } else {
-                              customerCtrl.clear();
-                            }
-                          });
-                        },
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      TextFormField(
-                        controller: customerCtrl,
-                        decoration: const InputDecoration(labelText: "Customer"),
-                        enabled: selectedCustomerName == null, // Editable only if no dropdown selection
-                        validator: (val) {
-                          if ((selectedCustomerName == null || selectedCustomerName!.isEmpty) && (val == null || val.isEmpty)) {
-                            return 'Please enter customer name';
-                          }
-                          return null;
-                        },
-                      ),
-                      TextFormField(controller: customerFirmCtrl, decoration: const InputDecoration(labelText: "Customer Firm")),
-                      TextFormField(
-                        controller: customerMobileCtrl,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(labelText: "Customer Mobile"),
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
-                        validator: (val) {
-                          if (val == null || val.isEmpty) return 'Please enter mobile number';
-                          if (!RegExp(r'^\d{10}$').hasMatch(val)) return 'Mobile number must be 10 digits';
-                          return null;
-                        },
-                      ),
-                      TextFormField(controller: customerAddressCtrl, decoration: const InputDecoration(labelText: "Customer Address")),
-                      TextFormField(
-                        controller: dateCtrl,
-                        readOnly: true,
-                        onTap: () async {
-                          DateTime? date = await showDatePicker(
-                              context: context,
-                              initialDate: isEditMode
-                                  ? DateFormat("dd/MM/yyyy").parse(widget.invoiceToEdit!.date)
-                                  : DateTime.now(),
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime(2030));
-                          if (date != null) dateCtrl.text = DateFormat("dd/MM/yyyy").format(date);
-                        },
-                        decoration: const InputDecoration(labelText: "Date"),
-                        validator: (val) {
-                          if (val == null || val.isEmpty) return 'Please select a date';
-                          if (!validateDate()) return 'Date is invalid for this invoice';
-                          return null;
-                        },
-                      ),
-                      Row(children: [
-                        const Text("Is GST?"),
-                        Radio<String>(
-                            value: "Yes",
-                            groupValue: gstValue,
-                            onChanged: (val) => setState(() {
-                              gstValue = val!;
-                              if (gstValue == "No") {
-                                gstNumberCtrl.clear();
-                              }
-                            })),
-                        const Text("Yes"),
-                        Radio<String>(
-                            value: "No",
-                            groupValue: gstValue,
-                            onChanged: (val) => setState(() {
-                              gstValue = val!;
-                              if (gstValue == "No") {
-                                gstNumberCtrl.clear();
-                              }
-                            })),
-                        const Text("No"),
-                      ]),
-                      if (gstValue == "Yes")
-                        TextFormField(
-                          controller: gstNumberCtrl,
-                          decoration: const InputDecoration(labelText: "GST Number"),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
-                            LengthLimitingTextInputFormatter(15),
-                          ],
-                          validator: (val) {
-                            if (gstValue == "Yes") {
-                              if (val == null || val.isEmpty) return "Please enter GST Number";
-                              if (!RegExp(r'^[a-zA-Z0-9]{15}$').hasMatch(val)) {
-                                return "GST Number must be exactly 15 alphanumeric characters";
-                              }
-                            }
-                            return null;
-                          },
-                        ),
-                      TextFormField(controller: invoiceNoCtrl, decoration: const InputDecoration(labelText: "Invoice No")),
-                      TextFormField(controller: shipToCtrl, decoration: const InputDecoration(labelText: "Ship To")),
-                      DropdownButtonFormField<String>(
-                        value: selectedTransport.isNotEmpty ? selectedTransport : null,
-                        decoration: const InputDecoration(labelText: "Transport"),
-                        items: transportOptions
-                            .map((e) => DropdownMenuItem<String>(
-                          value: e,
-                          child: Text(e),
-                        ))
-                            .toList(),
-                        onChanged: (val) => setState(() => selectedTransport = val ?? ''),
-                        validator: (val) {
-                          if (val == null || val.isEmpty) return 'Please select transport';
-                          return null;
-                        },
-                      ),                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-              // Product Table
-              Card(
-                elevation: 2,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      const Text("Product Details", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      ...products.asMap().entries.map((entry) {
-                        int i = entry.key;
-                        var item = entry.value;
-                        return Row(children: [
-                          Expanded(
-                            child: TextFormField(
-                              initialValue: item['product']?.toString() ?? '',
-                              onChanged: (val) {
-                                setState(() {
-                                  item['product'] = val;
-                                });
-                              },
-                              decoration: const InputDecoration(labelText: "Product"),
-                            ),
-                          ),
-                          Expanded(
-                            child: TextFormField(
-                              initialValue: item['desc']?.toString() ?? '',
-                              onChanged: (val) {
-                                setState(() {
-                                  item['desc'] = val;
-                                });
-                              },
-                              decoration: const InputDecoration(labelText: "Desc"),
-                            ),
-                          ),
-                          Expanded(
-                            child: TextFormField(
-                              initialValue: (item['price'] ?? 0).toString(),
-                              onChanged: (val) {
-                                setState(() {
-                                  item['price'] = double.tryParse(val) ?? 0;
-                                  updateProductCalculation(i);
-                                });
-                              },
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              inputFormatters: [
-                                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')), // allows 2 decimals max
-                              ],
-                              decoration: const InputDecoration(labelText: "Price"),
-                            ),
-                          ),
-                          Expanded(
-                            child: TextFormField(
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                              initialValue: (item['qty'] ?? 1).toString(),
-                              onChanged: (val) {
-                                setState(() {
-                                  item['qty'] = int.tryParse(val) ?? 1;
-                                  updateProductCalculation(i);
-                                });
-                              },
-                              decoration: const InputDecoration(labelText: "Qty"),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text("₹ ${(item['price'] ?? 0) * (item['qty'] ?? 1)}"),
-                          ),
-                          Expanded(
-                            child: TextFormField(
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                              initialValue: (item['discount_percent'] ?? 0.0).toString(),
-                              onChanged: (val) {
-                                setState(() {
-                                  item['discount_percent'] = double.tryParse(val) ?? 0.0;
-                                  updateProductCalculation(i);
-                                });
-                              },
-                              decoration: const InputDecoration(labelText: "Dis.%"),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text("₹ ${item['discount_amount']?.toStringAsFixed(2) ?? '0.00'}"),
-                          ),
-                          Expanded(
-                            child: Text("₹ ${item['subtotal']?.toStringAsFixed(2) ?? '0.00'}"),
-                          ),
-                          Expanded(
-                            child: TextFormField(
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                              initialValue: (item['gst_percent'] ?? 0.0).toString(),
-                              onChanged: (val) {
-                                setState(() {
-                                  item['gst_percent'] = double.tryParse(val) ?? 0.0;
-                                  updateProductCalculation(i);
-                                });
-                              },
-                              decoration: const InputDecoration(labelText: "GST%"),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text("₹ ${item['gst_amount']?.toStringAsFixed(2) ?? '0.00'}"),
-                          ),
-                          Expanded(
-                            child: Text("₹ ${item['total']?.toStringAsFixed(2) ?? '0.00'}"),
-                          ),
-
-                        ]);
-                      }).toList(),
-                      const SizedBox(height: 10),
-                      ElevatedButton(onPressed: addEmptyProductRow, child: const Text("Add Product"))
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
+              // Invoice Fields
               Row(
                 children: [
                   Expanded(
                     child: TextFormField(
-                      controller: paidAmountCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                      ],
-                      validator: (val) {
-                        if (val == null || val.isEmpty) return 'Please enter paid amount';
-                        final paid = double.tryParse(val);
-                        if (paid == null || paid < 0) return 'Invalid paid amount';
-                        if (paid > getTotalAmount('total')) return 'Paid amount cannot exceed total';
-                        return null;
-                      },
-                      decoration: const InputDecoration(labelText: "Paid Amount"),
+                      controller: invoiceNoCtrl,
+                      decoration: const InputDecoration(labelText: "Invoice No"),
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    "Unpaid Amount: ₹ ${(getTotalAmount('total') - (double.tryParse(paidAmountCtrl.text) ?? 0.0)).clamp(0, double.infinity).toStringAsFixed(2)}",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  Expanded(
+                    child: TextFormField(
+                      controller: dateCtrl,
+                      readOnly: true, // Prevent manual typing
+                      decoration: const InputDecoration(labelText: "Date"),
+                      onTap: () async {
+                        FocusScope.of(context).requestFocus(FocusNode()); // Dismiss keyboard
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime.now(),
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime.now(), // Prevent future date
+                        );
+                        if (picked != null) {
+                          dateCtrl.text = DateFormat('dd/MM/yyyy').format(picked);
+                        }
+                      },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) return 'Required';
+                        try {
+                          final selected = DateFormat('dd/MM/yyyy').parseStrict(value);
+                          final now = DateTime.now();
+                          if (selected.isAfter(now)) {
+                            return 'Future date not allowed';
+                          }
+                        } catch (_) {
+                          return 'Invalid date format';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: yourFirmCtrl,
+                      decoration: const InputDecoration(labelText: "Your Firm"),
+                    ),
+                  ),
+                  Expanded(
+                    child: TextFormField(
+                      controller: yourFirmAddressCtrl,
+                      decoration: const InputDecoration(
+                        labelText: "Your Firm Address",
+                      ),
+                    ),
                   ),
                 ],
               ),
-              // Summary & Save
-              Card(
-                elevation: 2,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("Subtotal: ₹ ${getTotalAmount('subtotal').toStringAsFixed(2)}"),
-                      Text("Discount: ₹ ${getTotalAmount('discount_amount').toStringAsFixed(2)}"),
-                      Text("GST: ₹ ${getTotalAmount('gst_amount').toStringAsFixed(2)}"),
-                      Text("Total: ₹ ${getTotalAmount('total').toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 10),
-                      // Only show button if user can either create or edit
-                      Visibility(
-                        visible: UserSession.canEdit('Invoice') || UserSession.canCreate('Invoice'),
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            if (_formKey.currentState!.validate()) {
-                              if (!validateProducts()) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text("Please fill all product fields correctly")),
-                                );
-                                return;
-                              }
-
-                              try {
-                                if (isEditMode && UserSession.canEdit('Invoice')) {
-                                  // Edit mode & user has edit permission
-                                  await saveInvoice(); // Your save function can internally check if updating or inserting
-                                } else if (!isEditMode && UserSession.canCreate('Invoice')) {
-                                  // Create mode & user has create permission
-                                  await saveInvoice();
-                                } else {
-                                  // No permission
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('You do not have permission to perform this action.')),
-                                  );
-                                }
-                              } catch (e, stack) {
-                                print('Error saving invoice: $e\n$stack');
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Failed to save invoice: $e')),
-                                );
-                              }
-                            }
-                          },
-                          child: Text(isEditMode ? "Update Invoice" : "Save Invoice"),
-                        ),
-                      )
-                    ],
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: buyerNameCtrl,
+                      decoration: const InputDecoration(labelText: "Buyer Name"),
+                    ),
                   ),
+                  Expanded(
+                    child: TextFormField(
+                      controller: buyerAddressCtrl,
+                      decoration: const InputDecoration(
+                        labelText: "Buyer Address",
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: placeOfSupplyCtrl,
+                      decoration: const InputDecoration(
+                        labelText: "Place of Supply",
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: TextFormField(
+                      controller: gstinSupplierCtrl,
+                      decoration: const InputDecoration(labelText: "GSTIN Supplier"),
+                      validator: (val) {
+                        if (val == null || val.trim().length != 15 || !RegExp(r'^[A-Za-z0-9]+$').hasMatch(val)) {
+                          return 'Must be 15 alphanumeric characters';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: gstinBuyerCtrl,
+                      decoration: const InputDecoration(labelText: "GSTIN Buyer"),
+                      validator: (val) {
+                        if (val == null || val.trim().length != 15 || !RegExp(r'^[A-Za-z0-9]+$').hasMatch(val)) {
+                          return 'Must be 15 alphanumeric characters';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+
+                  Expanded(
+                    child: TextFormField(
+                      controller: poNumberCtrl,
+                      decoration: const InputDecoration(labelText: "PO Number"),
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: mobileNoCtrl,
+                      maxLength: 10,
+                      decoration: const InputDecoration(labelText: "Mobile No"),
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                      validator: (val) {
+                        if (val == null || !RegExp(r'^\d{10}$').hasMatch(val)) {
+                          return 'Enter valid 10-digit mobile number';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: TextFormField(
+                      controller: bankNameCtrl,
+                      decoration: const InputDecoration(labelText: "Bank Name"),
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: accountNumberCtrl,
+                      decoration: const InputDecoration(labelText: "Account Number"),
+                      keyboardType: TextInputType.number,
+                      maxLength: 14,
+                      validator: (val) {
+                        if (val == null || val.isEmpty) {
+                          return 'Account number is required';
+                        }
+                        if (val.length < 6 || val.length > 14) {
+                          return 'Enter 6 to 14 digits only';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: TextFormField(
+                      controller: ifscCodeCtrl,
+                      maxLength: 11,
+                      decoration: const InputDecoration(labelText: "IFSC Code"),
+                      validator: (val) {
+                        if (val == null || val.length != 11 || !RegExp(r'^[A-Z|a-z]{4}0[A-Z0-9]{6}$').hasMatch(val)) {
+                          return 'Invalid IFSC code';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: transportCtrl,
+                      decoration: const InputDecoration(labelText: "Transport"),
+                    ),
+                  ),
+                  Expanded(
+                    child: TextFormField(
+                      controller: termsCtrl,
+                      decoration: const InputDecoration(
+                        labelText: "Terms & Conditions",
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: jurisdictionCtrl,
+                      decoration: const InputDecoration(
+                        labelText: "Jurisdiction",
+                      ),
+                    ),
+                  ),
+
+                  Expanded(
+                    child: TextFormField(
+                      controller: signatureCtrl,
+                      decoration: const InputDecoration(labelText: "Signature"),
+                    ),
+                  ),
+                ],
+              ),
+              // Add Product Button
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                icon: Icon(Icons.add),
+                label: Text("Add Product"),
+                onPressed: addEmptyProduct,
+              ),
+              const SizedBox(height: 10),
+
+              ...products.asMap().entries.map((entry) {
+                int index = entry.key;
+                var item = entry.value;
+                return Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            initialValue: item['product'],
+                            decoration: InputDecoration(labelText: "Product Name"),
+                            onChanged: (val) => item['product'] = val,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            initialValue: item['desc'],
+                            decoration: InputDecoration(labelText: "Description"),
+                            onChanged: (val) => item['desc'] = val,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            initialValue: item['hsnSac'] ?? '',
+                            decoration: InputDecoration(labelText: "HSN/SAC"),
+                            onChanged: (val) {
+                              setState(() {
+                                item['hsnSac'] = val;
+                              });
+                            },
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: TextFormField(
+                            initialValue: item['mm'] ?? '',
+                            decoration: InputDecoration(labelText: "MM"),
+                            onChanged: (val) {
+                              setState(() {
+                                item['mm'] = val;
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            initialValue: item['price'].toString(),
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(labelText: "Price"),
+                            validator: (val) {
+                              if (val == null || double.tryParse(val) == null) return 'Invalid';
+                              return null;
+                            },
+                            onChanged: (val) {
+                              item['price'] = double.tryParse(val) ?? 0.0;
+                              updateProduct(index);
+                            },
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            initialValue: item['qty'].toString(),
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(labelText: "Qty"),
+                            onChanged: (val) {
+                              item['qty'] = int.tryParse(val) ?? 1;
+                              updateProduct(index);
+                            },
+                            validator: (val) {
+                              if (val == null || double.tryParse(val) == null) return 'Invalid';
+                              return null;
+                            },
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            initialValue: item['discount_percent'].toString(),
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(labelText: "Discount %"),
+                            onChanged: (val) {
+                              item['discount_percent'] = double.tryParse(val) ?? 0.0;
+                              updateProduct(index);
+                            },
+                            validator: (val) {
+                              if (val == null || double.tryParse(val) == null) return 'Invalid';
+                              return null;
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Expanded(child: Text("Amount: ₹${(item['price'] ?? 0) * (item['qty'] ?? 1)}")),
+                        Expanded(child: Text("Discount: ₹${item['discount_amount'].toStringAsFixed(2)}")),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Expanded(child: Text("CGST: ₹${item['cgst'].toStringAsFixed(2)}")),
+                        Expanded(child: Text("SGST: ₹${item['sgst'].toStringAsFixed(2)}")),
+                        Expanded(child: Text("Total: ₹${item['total'].toStringAsFixed(2)}")),
+                      ],
+                    ),
+                    Divider(),
+                  ],
+                );
+              }).toList(),
+
+              Divider(thickness: 2),
+              Text("Subtotal: ₹${getTotal('subtotal').toStringAsFixed(2)}"),
+              Text("Total GST: ₹${getTotal('gst_amount').toStringAsFixed(2)}"),
+              Text("Total: ₹${getTotal('total').toStringAsFixed(2)}"),
+              Visibility(
+                visible: UserSession.canEdit('Invoice') || UserSession.canCreate('Invoice'),
+                child: ElevatedButton(
+                  onPressed: () async {
+                    if (_formKey.currentState?.validate() ?? false) {
+                      await saveInvoice(); // Save the invoice if validation passes
+                    }
+                  },
+                  child: Text(isEditMode ? "Update Invoice" : "Save Invoice"),
                 ),
               )
             ],
           ),
         ),
-      ),
-    );
+      );
+    }
   }
-}

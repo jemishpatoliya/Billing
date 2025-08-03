@@ -34,26 +34,42 @@ class UserRepository {
     // New invoice table
     await _db.execute('''
       CREATE TABLE IF NOT EXISTS invoices (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        your_firm TEXT,
-        customer_name TEXT,
-        customer_firm TEXT,
-        customer_mobile TEXT,
-        customer_address TEXT,
-        date TEXT,
-        is_gst INTEGER,
-        invoice_no TEXT,
-        ship_to TEXT,
-        transport TEXT,
-        product_details TEXT,  -- store JSON string of product rows
-        amount REAL,
-        discount REAL,
-        subtotal REAL,
-        tax REAL,
-        total REAL,
-        paid_amount REAL,
-        unpaid_amount REAL,
-        gst_number TEXT
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      invoice_no TEXT UNIQUE,                -- 015
+      date TEXT,                   -- 05-06-2025
+      your_firm TEXT,                 -- RUDRA ENTERPRISE
+      your_firm_address TEXT,         -- 199, Sneh Milan Soc...
+
+      buyer_name TEXT,               -- AB GLOW SIGN (M/s)
+      buyer_address TEXT,            -- First Floor, Plot No...
+      place_of_supply TEXT,          -- 24 - Gujarat, Surat...
+
+      gstin_supplier TEXT,           -- 24AHHPU2550P1ZU
+      gstin_buyer TEXT,              -- 24BROPG9981J1Z2
+
+      po_number TEXT,                -- Optional
+      mobile_no TEXT,                -- Optional
+
+      product_details TEXT,          -- JSON String (S.No., Product Name, HSN, Rate, Qty, Amount)
+  
+      subtotal REAL,                 -- 41490
+      cgst REAL,                     -- 3734
+      sgst REAL,                     -- 3734
+      total_gst REAL,               -- 7468
+      total REAL,                   -- 48958
+      rounded_total REAL,           -- 48958.00
+      total_in_words TEXT,          -- Forty Eight Thousand...
+
+      bank_name TEXT,               -- HDFC/Axis Bank
+      account_number TEXT,          -- 99997878012143
+      ifsc_code TEXT,               -- HDFC0001703
+
+      transport TEXT,               -- Optional
+      terms_conditions TEXT,        -- JSON or Text 
+      jurisdiction TEXT,            -- Surat
+      signature TEXT,                -- Authorised Signatory
+      hsnSac TEXT,   -- new field
+      mm TEXT        -- new field
       );
     ''');
     _isInitialized = true;
@@ -110,13 +126,27 @@ class UserRepository {
     final result = await _db.query('invoices', orderBy: "id DESC");
     return result.map((map) => InvoiceModel.fromMap(map)).toList();
   }
+
   Future<void> updateInvoice(InvoiceModel invoice) async {
-    await _db.update(
+    int updated = await _db.update(
       'invoices',
       invoice.toJson(),
       where: 'id = ?',
       whereArgs: [invoice.id],
     );
+    print('Rows updated: $updated');
   }
+
+  Future<void> deleteInvoice(int id) async {
+    await _db.delete(
+      'invoices', // Table name
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+  Future<void> deleteUser(int id) async {
+    await _db.delete('users', where: 'id = ?', whereArgs: [id]);
+  }
+
 
 }

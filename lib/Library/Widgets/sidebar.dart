@@ -23,7 +23,7 @@ class _SidebarState extends State<Sidebar> {
       child: ListView(
         children: [
           DrawerHeader(
-            child: Text('GO ACCOUNT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            child: Text('Invoxel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           ),
 
           // Dashboard
@@ -95,7 +95,6 @@ class _SidebarState extends State<Sidebar> {
           ),
           // Add this after the "Master" section in your ListView
 
-// Quotation Section
           ExpansionTile(
             leading: Icon(Icons.request_quote),
             title: Text('Quotations'),
@@ -112,31 +111,31 @@ class _SidebarState extends State<Sidebar> {
               ),
             ],
           ),
-          Visibility(
-            visible: UserSession.canCreate('Invoice') || UserSession.canView('Invoice') || UserSession.canEdit('Invoice'),
-            child: ExpansionTile(
-              leading: Icon(Icons.receipt_long),
-              title: Text('Invoices'),
-              children: [
-                Visibility(
-                  visible: UserSession.canCreate('Invoice') || UserSession.canEdit('Invoice'),
-                  child: ListTile(
-                    leading: Icon(Icons.note_add_outlined),
-                    title: Text('Add Invoice'),
-                    onTap: () => navCubit.changePage('add_invoice'),
+            Visibility(
+              visible: UserSession.canCreate('Invoice') || UserSession.canView('Invoice') || UserSession.canEdit('Invoice'),
+              child: ExpansionTile(
+                leading: Icon(Icons.receipt_long),
+                title: Text('Invoices'),
+                children: [
+                  Visibility(
+                    visible: UserSession.canCreate('Invoice') || UserSession.canEdit('Invoice'),
+                    child: ListTile(
+                      leading: Icon(Icons.note_add_outlined),
+                      title: Text('Add Invoice'),
+                      onTap: () => navCubit.changePage('add_invoice'),
+                    ),
                   ),
-                ),
-                Visibility(
-                  visible: UserSession.canView('Invoice'),
-                  child: ListTile(
-                    leading: Icon(Icons.list),
-                    title: Text('All Invoices'),
-                    onTap: () => navCubit.changePage('all_invoice'),
+                  Visibility(
+                    visible: UserSession.canView('Invoice'),
+                    child: ListTile(
+                      leading: Icon(Icons.list),
+                      title: Text('All Invoices'),
+                      onTap: () => navCubit.changePage('all_invoice'),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
 
           // Purchase Section
           ExpansionTile(

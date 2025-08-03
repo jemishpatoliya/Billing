@@ -13,20 +13,9 @@ class Topbar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // Left: Drawer button and title
-          Row(
-            children: [
-              IconButton(
-                icon: Icon(Icons.menu, color: Colors.white),
-                onPressed: () {
-                  Scaffold.of(context).openDrawer();
-                },
-              ),
-              SizedBox(width: 10),
-              Text(
-                "All Transports",
-                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
-              ),
-            ],
+          Text(
+            "Invoxel",
+            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
           ),
 
           // Right: Icons
