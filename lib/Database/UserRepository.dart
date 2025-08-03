@@ -87,7 +87,14 @@ class UserRepository {
       whereArgs: [email, password],
     );
     if (result.isNotEmpty) {
-      return UserModel.fromJson(result.first);
+      final user = UserModel.fromJson(result.first);
+
+      // 👇 Check if user is Inactive
+      if (user.status?.toLowerCase() == 'inactive') {
+        throw Exception('Your account is inactive. Please contact admin.');
+      }
+
+      return user;
     }
     return null;
   }

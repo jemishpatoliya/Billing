@@ -1,5 +1,5 @@
-
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../../Database/UserRepository.dart';
 import '../../Model/UserModel.dart';
@@ -20,7 +20,6 @@ class _AddUsersState extends State<AddUsers> {
   final addressController = TextEditingController();
   final usernameController = TextEditingController();
   String selectedRole = 'user';
-
   String selectedStatus = 'Active';
   bool selectAll = false;
 
@@ -39,10 +38,15 @@ class _AddUsersState extends State<AddUsers> {
   ];
 
   Map<String, Map<String, bool>> permissions = {};
+
   @override
   void initState() {
     super.initState();
+    _initializePermissions();
+    _loadExistingUserData();
+  }
 
+  void _initializePermissions() {
     for (var module in modules) {
       permissions[module] = {
         'View': false,
@@ -50,54 +54,53 @@ class _AddUsersState extends State<AddUsers> {
         'Edit': false,
       };
     }
+  }
 
+  void _loadExistingUserData() {
     final existingUser = widget.user;
     if (existingUser != null) {
       emailController.text = existingUser.email;
       passwordController.text = existingUser.password;
       numberController.text = existingUser.number;
       addressController.text = existingUser.address;
-      usernameController.text = existingUser?.username ?? '';
+      usernameController.text = existingUser.username ?? '';
 
-      if (existingUser.role != null) {
-        final role = existingUser.role!.trim().toLowerCase();
-        if (role == 'admin' || role == 'user') {
-          selectedRole = role;
-        } else {
-          selectedRole = 'user';
-        }
-      } else {
-        selectedRole = 'user';
-      }
-
-      if (['Active', 'Inactive'].contains(existingUser.status)) {
-        selectedStatus = existingUser.status!;
-      } else {
-        selectedStatus = 'Active';
-      }
+      selectedRole = _validateRole(existingUser.role);
+      selectedStatus = _validateStatus(existingUser.status);
 
       try {
         final decodedPermissions = jsonDecode(existingUser.permissions ?? '{}');
-        for (var module in decodedPermissions.keys) {
-          if (permissions.containsKey(module)) {
-            final modulePerms = decodedPermissions[module];
-            for (var action in modulePerms.keys) {
-              if (permissions[module]!.containsKey(action)) {
-                permissions[module]![action] = modulePerms[action];
-              }
-            }
-          }
-        }
-
-        selectAll = permissions.values.every(
-              (perm) => perm.values.every((val) => val == true),
-        );
+        _loadPermissions(decodedPermissions);
       } catch (e) {
         debugPrint("Permission decode error: $e");
       }
     }
   }
 
+  String _validateRole(String? role) {
+    final normalizedRole = role?.trim().toLowerCase() ?? 'user';
+    return ['admin', 'user'].contains(normalizedRole) ? normalizedRole : 'user';
+  }
+
+  String _validateStatus(String? status) {
+    return ['Active', 'Inactive'].contains(status) ? status! : 'Active';
+  }
+
+  void _loadPermissions(Map<String, dynamic> decodedPermissions) {
+    for (var module in decodedPermissions.keys) {
+      if (permissions.containsKey(module)) {
+        final modulePerms = decodedPermissions[module] as Map<String, dynamic>;
+        for (var action in modulePerms.keys) {
+          if (permissions[module]!.containsKey(action)) {
+            permissions[module]![action] = modulePerms[action] == true;
+          }
+        }
+      }
+    }
+    selectAll = permissions.values.every(
+          (perm) => perm.values.every((val) => val == true),
+    );
+  }
 
   void toggleSelectAll(bool? value) {
     setState(() {
@@ -113,145 +116,196 @@ class _AddUsersState extends State<AddUsers> {
   void togglePermission(String module, String action, bool? value) {
     setState(() {
       permissions[module]![action] = value ?? false;
-
-      // If any permission is false, uncheck Select All
-      selectAll = permissions.values.every((actionMap) =>
-          actionMap.values.every((val) => val == true));
+      selectAll = permissions.values.every(
+              (actionMap) => actionMap.values.every((val) => val == true)
+      );
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final isLargeScreen = MediaQuery.of(context).size.width > 800;
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.user == null ? "Add User" : "Edit User"),
-      ), body: SingleChildScrollView(
+        title: Text(widget.user == null ? "Add New User" : "Edit User"),
+        centerTitle: true,
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: 800),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: Form(
+              key: _formKey,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  buildInputField(
-                    "User Name",
-                    usernameController,
-                    Icons.person,
-                    validator: (val) => validateRequired(val, "User Name"),
-                  ),
-                  const SizedBox(height: 12),
-                  buildInputField(
-                    "Email",
-                    emailController,
-                    Icons.email,
-                    keyboardType: TextInputType.emailAddress,
-                    validator: validateEmail,
-                  ),
-                  const SizedBox(height: 12),
-                  buildInputField(
-                    "Password",
-                    passwordController,
-                    Icons.lock,
-                    obscure: true,
-                    validator: validatePassword,
-                  ),
-                  const SizedBox(height: 12),
-                  buildInputField(
-                    "Number",
-                    numberController,
-                    Icons.phone,
-                    keyboardType: TextInputType.phone,
-                    validator: validateMobile,
-                  ),
-                  const SizedBox(height: 12),
-                  buildInputField(
-                    "Address",
-                    addressController,
-                    Icons.home,
-                    validator: (val) => validateRequired(val, "Address"),
-                  ),
-
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    decoration: InputDecoration(
-                      labelText: "Role",
-                      border: OutlineInputBorder(),
+                  Card(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    value: selectedRole,
-                    items: ['user', 'admin'].map((role) {
-                      return DropdownMenuItem(
-                        value: role,
-                        child: Text(role[0].toUpperCase() + role.substring(1)),
-                      );
-                    }).toList(),
-                    onChanged: (val) => setState(() => selectedRole = val!),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    decoration: InputDecoration(
-                      labelText: "Status",
-                      border: OutlineInputBorder(),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          Text(
+                            "Basic Information",
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: theme.primaryColor,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildInputField(
+                            "User Name",
+                            usernameController,
+                            Icons.person_outline,
+                            validator: (val) => _validateRequired(val, "User Name"),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildInputField(
+                            "Email",
+                            emailController,
+                            Icons.email_outlined,
+                            keyboardType: TextInputType.emailAddress,
+                            validator: _validateEmail,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildInputField(
+                            "Password",
+                            passwordController,
+                            Icons.lock_outline,
+                            obscure: true,
+                            validator: _validatePassword,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildInputField(
+                            "Phone Number",
+                            numberController,
+                            Icons.phone_outlined,
+                            keyboardType: TextInputType.phone,
+                            validator: _validateMobile,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildInputField(
+                            "Address",
+                            addressController,
+                            Icons.home_outlined,
+                            maxLines: 2,
+                            validator: (val) => _validateRequired(val, "Address"),
+                          ),
+                        ],
+                      ),
                     ),
-                    value: selectedStatus,
-                    items: ['Active', 'Inactive']
-                        .map((status) => DropdownMenuItem(
-                      child: Text(status),
-                      value: status,
-                    ))
-                        .toList(),
-                    onChanged: (value) => setState(() => selectedStatus = value!),
                   ),
                   const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Checkbox(value: selectAll, onChanged: toggleSelectAll),
-                      const Text("All"),
-                    ],
-                  ),
-                  buildPermissionTable(),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: () async {
-                      if (_formKey.currentState!.validate()) {
-                        final user = UserModel(
-                          id: widget.user?.id, // Use existing ID if editing
-                          shopName: 'Demo Shop',
-                          username: usernameController.text,
-                          address: addressController.text,
-                          email: emailController.text,
-                          number: numberController.text,
-                          password: passwordController.text,
-                          role: selectedRole,
-                          status: selectedStatus,
-                          permissions: jsonEncode(permissions),
-                        );
-
-                        final repo = UserRepository();
-                        await repo.init();
-
-                        if (widget.user == null) {
-                          await repo.registerUser(user);
-                          Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("User Created ✅")),
-                          );
-                        } else {
-                          await repo.updateUser(user);
-                          Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("User Updated ✏️")),
-                          );
-                        }
-                      }
-                    },
+                  Card(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
-                      child: Text(widget.user == null ? 'Add User' : 'Update User'),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "User Settings",
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: theme.primaryColor,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildDropdown(
+                                  "Role",
+                                  selectedRole,
+                                  ['user', 'admin'],
+                                      (val) => setState(() => selectedRole = val!),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: _buildDropdown(
+                                  "Status",
+                                  selectedStatus,
+                                  ['Active', 'Inactive'],
+                                      (val) => setState(() => selectedStatus = val!),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
+                  const SizedBox(height: 24),
+                  Card(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                "Permissions",
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.primaryColor,
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  const Text("Select All"),
+                                  const SizedBox(width: 8),
+                                  Switch(
+                                    value: selectAll,
+                                    onChanged: toggleSelectAll,
+                                    activeColor: theme.primaryColor,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: _buildPermissionTable(theme, isDarkMode),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Center(
+                    child: ElevatedButton(
+                      onPressed: _saveUser,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        widget.user == null ? 'CREATE USER' : 'UPDATE USER',
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -261,98 +315,205 @@ class _AddUsersState extends State<AddUsers> {
     );
   }
 
-// Helper functions for validation
-  String? validateEmail(String? val) {
-    if (val == null || val.isEmpty) return "Enter Email";
-    // Basic email regex
-    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-    if (!emailRegex.hasMatch(val)) return "Enter valid email";
-    return null;
-  }
-
-  String? validatePassword(String? val) {
-    if (val == null || val.isEmpty) return "Enter Password";
-    if (val.length < 6) return "Password must be at least 6 characters";
-    return null;
-  }
-
-  String? validateMobile(String? val) {
-    if (val == null || val.isEmpty) return "Enter Mobile Number";
-    final digitOnly = RegExp(r'^\d{10}$');
-    if (!digitOnly.hasMatch(val)) return "Mobile must be exactly 10 digits";
-    return null;
-  }
-
-  String? validateRequired(String? val, String fieldName) {
-    if (val == null || val.isEmpty) return "Enter $fieldName";
-    return null;
-  }
-
-// Updated buildInputField with validator parameter
-  Widget buildInputField(
+  Widget _buildInputField(
       String label,
       TextEditingController controller,
       IconData icon, {
         bool obscure = false,
-        String? Function(String?)? validator,
+        int maxLines = 1,
         TextInputType keyboardType = TextInputType.text,
+        String? Function(String?)? validator,
       }) {
     return TextFormField(
       controller: controller,
       obscureText: obscure,
       keyboardType: keyboardType,
+      maxLines: maxLines,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon),
-        border: OutlineInputBorder(),
+        border: const OutlineInputBorder(),
+        filled: true,
       ),
-      validator: validator ?? (val) => validateRequired(val, label),
+      validator: validator,
     );
   }
 
+  Widget _buildDropdown(
+      String label,
+      String value,
+      List<String> items,
+      Function(String?) onChanged,
+      ) {
+    return DropdownButtonFormField<String>(
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        filled: true,
+      ),
+      value: value,
+      items: items.map((item) {
+        return DropdownMenuItem(
+          value: item,
+          child: Text(item[0].toUpperCase() + item.substring(1)),
+        );
+      }).toList(),
+      onChanged: onChanged,
+    );
+  }
 
-  Widget buildPermissionTable() {
-    return Table(
-      border: TableBorder.all(color: Colors.grey.shade300),
-      columnWidths: const {
-        0: FixedColumnWidth(150),
-        1: FlexColumnWidth(),
-        2: FlexColumnWidth(),
-        3: FlexColumnWidth(),
-      },
-      children: [
-        TableRow(
-          decoration: BoxDecoration(color: Colors.blueGrey.shade50),
-          children: const [
-              Padding(padding: EdgeInsets.all(8), child: Text('Module')),
-              Padding(padding: EdgeInsets.all(8), child: Text('View')),
-              Padding(padding: EdgeInsets.all(8), child: Text('Create')),
-              Padding(padding: EdgeInsets.all(8), child: Text('Edit')),
-          ],
+  Widget _buildPermissionTable(ThemeData theme, bool isDarkMode) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: DataTable(
+        headingRowColor: MaterialStateProperty.resolveWith<Color>(
+              (states) => isDarkMode ? Colors.grey[800]! : Colors.grey[100]!,
         ),
-        ...modules.map((module) {
-          return TableRow(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: Text(module),
+        columns: const [
+          DataColumn(label: Text('Module', style: TextStyle(fontWeight: FontWeight.bold))),
+          DataColumn(label: Text('View', style: TextStyle(fontWeight: FontWeight.bold))),
+          DataColumn(label: Text('Create', style: TextStyle(fontWeight: FontWeight.bold))),
+          DataColumn(label: Text('Edit', style: TextStyle(fontWeight: FontWeight.bold))),
+        ],
+        rows: modules.map((module) {
+          return DataRow(
+            cells: [
+              DataCell(
+                Text(
+                  module,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
               ),
-              Checkbox(
-                value: permissions[module]!['View'],
-                onChanged: (val) => togglePermission(module, 'View', val),
+              DataCell(
+                Center(
+                  child: Transform.scale(
+                    scale: 1.2,
+                    child: Checkbox(
+                      value: permissions[module]!['View'],
+                      onChanged: (val) => togglePermission(module, 'View', val),
+                      fillColor: MaterialStateProperty.resolveWith<Color>(
+                            (states) => states.contains(MaterialState.selected)
+                            ? theme.primaryColor
+                            : Colors.grey,
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              Checkbox(
-                value: permissions[module]!['Create'],
-                onChanged: (val) => togglePermission(module, 'Create', val),
+              DataCell(
+                Center(
+                  child: Transform.scale(
+                    scale: 1.2,
+                    child: Checkbox(
+                      value: permissions[module]!['Create'],
+                      onChanged: (val) => togglePermission(module, 'Create', val),
+                      fillColor: MaterialStateProperty.resolveWith<Color>(
+                            (states) => states.contains(MaterialState.selected)
+                            ? theme.primaryColor
+                            : Colors.grey,
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              Checkbox(
-                value: permissions[module]!['Edit'],
-                onChanged: (val) => togglePermission(module, 'Edit', val),
+              DataCell(
+                Center(
+                  child: Transform.scale(
+                    scale: 1.2,
+                    child: Checkbox(
+                      value: permissions[module]!['Edit'],
+                      onChanged: (val) => togglePermission(module, 'Edit', val),
+                      fillColor: MaterialStateProperty.resolveWith<Color>(
+                            (states) => states.contains(MaterialState.selected)
+                            ? theme.primaryColor
+                            : Colors.grey,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ],
           );
-        }),
-      ],
+        }).toList(),
+      ),
     );
+  }
+
+  Future<void> _saveUser() async {
+    if (_formKey.currentState!.validate()) {
+      final user = UserModel(
+        id: widget.user?.id,
+        shopName: 'Demo Shop',
+        username: usernameController.text,
+        address: addressController.text,
+        email: emailController.text,
+        number: numberController.text,
+        password: passwordController.text,
+        role: selectedRole,
+        status: selectedStatus,
+        permissions: jsonEncode(permissions),
+      );
+
+      final repo = UserRepository();
+      await repo.init();
+
+      final successMessage = widget.user == null
+          ? "User created successfully"
+          : "User updated successfully";
+
+      try {
+        if (widget.user == null) {
+          await repo.registerUser(user);
+        } else {
+          await repo.updateUser(user);
+        }
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(successMessage),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error: ${e.toString()}"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Validation methods
+  String? _validateEmail(String? val) {
+    if (val == null || val.isEmpty) return "Email is required";
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+    if (!emailRegex.hasMatch(val)) return "Enter a valid email address";
+    return null;
+  }
+
+  String? _validatePassword(String? val) {
+    if (val == null || val.isEmpty) return "Password is required";
+    if (val.length < 6) return "Password must be at least 6 characters";
+    return null;
+  }
+
+  String? _validateMobile(String? val) {
+    if (val == null || val.isEmpty) return "Phone number is required";
+    final digitOnly = RegExp(r'^\d{10}$');
+    if (!digitOnly.hasMatch(val)) return "Enter a valid 10-digit phone number";
+    return null;
+  }
+
+  String? _validateRequired(String? val, String fieldName) {
+    if (val == null || val.isEmpty) return "$fieldName is required";
+    return null;
   }
 }

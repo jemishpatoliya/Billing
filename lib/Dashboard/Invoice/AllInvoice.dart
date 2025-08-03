@@ -1,6 +1,6 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../Database/UserRepository.dart';
 import '../../Library/UserSession.dart';
 import '../../Model/InvoiceModel.dart';
@@ -22,10 +22,22 @@ class _InvoiceListState extends State<InvoiceList> {
   final repo = UserRepository();
   List<InvoiceModel> invoices = [];
   List<InvoiceModel> filteredInvoices = [];
-
   final TextEditingController invoiceNoController = TextEditingController();
   final TextEditingController customerController = TextEditingController();
   final TextEditingController mobileController = TextEditingController();
+  bool _isLoading = false;
+  int itemsToShow = 10;
+  String _sortColumn = 'date';
+  bool _sortAscending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    loadInvoices();
+    invoiceNoController.addListener(applyFilter);
+    customerController.addListener(applyFilter);
+    mobileController.addListener(applyFilter);
+  }
 
   void applyFilter() {
     setState(() {
@@ -35,41 +47,16 @@ class _InvoiceListState extends State<InvoiceList> {
         final nameMatch = customerController.text.isEmpty ||
             inv.buyerName.toLowerCase().contains(customerController.text.toLowerCase());
         final mobileMatch = mobileController.text.isEmpty ||
-            inv.mobileNo!.contains(mobileController.text) ?? false;
+            (inv.mobileNo?.contains(mobileController.text) ?? false);
 
-        return invoiceMatch && nameMatch && mobileMatch;
-      }).toList();
+                return invoiceMatch && nameMatch && mobileMatch;
+            }).toList();
 
+      // Apply sorting
+      _sortInvoices();
       itemsToShow = 10;
     });
   }
-
-
-  bool _isLoading = false;
-  int itemsToShow = 10;
-
-  @override
-  void initState() {
-    super.initState();
-    loadInvoices();
-    invoiceNoController.addListener(applyFilter);
-    customerController.addListener(applyFilter);
-    mobileController.addListener(applyFilter);
-
-  }
-
-  Future<void> loadInvoices() async {
-    setState(() => _isLoading = true);
-    await repo.init();
-    final all = await repo.getAllInvoices();
-    setState(() {
-      invoices = all;
-      filteredInvoices = all;
-      itemsToShow = 10;
-      _isLoading = false;
-    });
-  }
-
   Future<void> generateInvoicePDFDesktop(InvoiceModel invoice, BuildContext context) async {
     final pdf = pw.Document();
 
@@ -277,74 +264,167 @@ class _InvoiceListState extends State<InvoiceList> {
     );
   }
 
+  void _sortInvoices() {
+    filteredInvoices.sort((a, b) {
+      var aValue, bValue;
+      switch (_sortColumn) {
+        case 'invoiceNo':
+          aValue = a.invoiceNo;
+          bValue = b.invoiceNo;
+          break;
+        case 'buyerName':
+          aValue = a.buyerName;
+          bValue = b.buyerName;
+          break;
+        case 'total':
+          aValue = a.total;
+          bValue = b.total;
+          break;
+        case 'date':
+          aValue = DateFormat('dd/MM/yyyy').parse(a.date);
+          bValue = DateFormat('dd/MM/yyyy').parse(b.date);
+          break;
+        case 'gstinBuyer':
+          aValue = a.gstinBuyer;
+          bValue = b.gstinBuyer;
+          break;
+        default:
+          aValue = a.invoiceNo;
+          bValue = b.invoiceNo;
+      }
+
+      if (aValue == bValue) return 0;
+      if (aValue is Comparable && bValue is Comparable) {
+        return _sortAscending ? aValue.compareTo(bValue) : bValue.compareTo(aValue);
+      }
+      return 0;
+    });
+  }
+
+  Future<void> loadInvoices() async {
+    setState(() => _isLoading = true);
+    await repo.init();
+    final all = await repo.getAllInvoices();
+    setState(() {
+      invoices = all;
+      filteredInvoices = all;
+      _sortInvoices();
+      itemsToShow = 10;
+      _isLoading = false;
+    });
+  }
+
+  // ... [keep your existing generateInvoicePDFDesktop and downloadAllInvoicesCSV methods] ...
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final displayedInvoices = filteredInvoices.take(itemsToShow).toList();
-
     bool canShowMore = itemsToShow < filteredInvoices.length;
 
     return Scaffold(
-      appBar: AppBar(title: const Text("All Invoices")),
+      appBar: AppBar(
+        title: const Text("Invoice Management"),
+        centerTitle: true,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: loadInvoices,
+            tooltip: 'Refresh',
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: loadInvoices,
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16.0),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Card(
-                elevation: 3,
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("Search", style: TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 10),
+                      Text(
+                        "Search Invoices",
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.primaryColor,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       Row(
                         children: [
                           Expanded(
                             child: TextField(
                               controller: invoiceNoController,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: "Invoice No",
                                 border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.numbers),
+                                contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: TextField(
                               controller: customerController,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: "Buyer Name",
                                 border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.person),
+                                contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: TextField(
                               controller: mobileController,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 labelText: "Mobile No",
                                 border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.phone),
+                                contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                               ),
+                              keyboardType: TextInputType.phone,
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          ElevatedButton(
-                            onPressed: applyFilter,
-                            child: const Text("Search"),
-                          ),
-                          const SizedBox(width: 8),
-                          OutlinedButton(
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          OutlinedButton.icon(
+                            icon: Icon(Icons.clear, size: 18),
+                            label: Text("Reset"),
                             onPressed: () {
                               invoiceNoController.clear();
                               customerController.clear();
                               mobileController.clear();
                               applyFilter();
                             },
-                            child: const Text("Reset"),
+                            style: OutlinedButton.styleFrom(
+                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            icon: Icon(Icons.search, size: 18),
+                            label: Text("Search"),
+                            onPressed: applyFilter,
+                            style: ElevatedButton.styleFrom(
+                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
                           ),
                         ],
                       ),
@@ -352,122 +432,279 @@ class _InvoiceListState extends State<InvoiceList> {
                   ),
                 ),
               ),
-
+              const SizedBox(height: 16),
               Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  Text(
+                    "Invoice Records",
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   ElevatedButton.icon(
-                    icon: const Icon(Icons.download),
-                    label: const Text("Download Excel"),
+                    icon: Icon(Icons.download, size: 18),
+                    label: Text("Export to Excel"),
                     onPressed: downloadAllInvoicesCSV,
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
-
               Expanded(
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : displayedInvoices.isEmpty
-                    ? const Center(child: Text('No invoices found'))
-                    : SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    columns: const [
-                      DataColumn(label: Text("Invoice No")),
-                      DataColumn(label: Text("Buyer Name")),
-                      DataColumn(label: Text("Total")),
-                      DataColumn(label: Text("Date")),
-                      DataColumn(label: Text("GST No")),
-                      DataColumn(label: Text("Action")),
+                    ? Center(child: CircularProgressIndicator())
+                    : filteredInvoices.isEmpty
+                    ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.receipt_long, size: 48, color: Colors.grey),
+                      const SizedBox(height: 16),
+                      Text(
+                        "No invoices found",
+                        style: theme.textTheme.titleMedium?.copyWith(color: Colors.grey),
+                      ),
+                      if (invoiceNoController.text.isNotEmpty ||
+                          customerController.text.isNotEmpty ||
+                          mobileController.text.isNotEmpty)
+                        TextButton(
+                          onPressed: () {
+                            invoiceNoController.clear();
+                            customerController.clear();
+                            mobileController.clear();
+                            applyFilter();
+                          },
+                          child: Text("Clear search filters"),
+                        ),
                     ],
-                    rows: displayedInvoices.map((invoice) {
-                      return DataRow(
-                        cells: [
-                          DataCell(Text(invoice.invoiceNo)),
-                          DataCell(Text(invoice.buyerName)),
-                          DataCell(Text("₹${invoice.total.toStringAsFixed(2)}")),
-                          DataCell(Text(invoice.date)),
-                          DataCell(Text(invoice.gstinBuyer)),
-                          DataCell(Row(
-                            children: [
-                              Visibility(
-                                visible: UserSession.canEdit('Invoice') ,
-                                child: IconButton(
-                                  icon: const Icon(Icons.edit, size: 20),
-                                  tooltip: "Edit",
-                                  onPressed: () async {
-                                    final result = await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => AddInvoice(invoiceToEdit: invoice),
-                                      ),
-                                    );
-                                    if (result == true) loadInvoices();
-                                  },
+                  ),
+                )
+                    : Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        headingRowColor: MaterialStateProperty.resolveWith<Color>(
+                              (states) => theme.colorScheme.primary.withOpacity(0.05),
+                        ),
+                        sortColumnIndex: _sortColumn == 'invoiceNo'
+                            ? 0
+                            : _sortColumn == 'buyerName'
+                            ? 1
+                            : _sortColumn == 'total'
+                            ? 2
+                            : _sortColumn == 'date'
+                            ? 3
+                            : 4,
+                        sortAscending: _sortAscending,
+                        columns: [
+                          DataColumn(
+                            label: Text("Invoice No"),
+                            onSort: (columnIndex, ascending) {
+                              setState(() {
+                                _sortColumn = 'invoiceNo';
+                                _sortAscending = ascending;
+                                _sortInvoices();
+                              });
+                            },
+                          ),
+                          DataColumn(
+                            label: Text("Buyer"),
+                            onSort: (columnIndex, ascending) {
+                              setState(() {
+                                _sortColumn = 'buyerName';
+                                _sortAscending = ascending;
+                                _sortInvoices();
+                              });
+                            },
+                          ),
+                          DataColumn(
+                            label: Text("Amount"),
+                            numeric: true,
+                            onSort: (columnIndex, ascending) {
+                              setState(() {
+                                _sortColumn = 'total';
+                                _sortAscending = ascending;
+                                _sortInvoices();
+                              });
+                            },
+                          ),
+                          DataColumn(
+                            label: Text("Date"),
+                            onSort: (columnIndex, ascending) {
+                              setState(() {
+                                _sortColumn = 'date';
+                                _sortAscending = ascending;
+                                _sortInvoices();
+                              });
+                            },
+                          ),
+                          DataColumn(
+                            label: Text("GST No"),
+                            onSort: (columnIndex, ascending) {
+                              setState(() {
+                                _sortColumn = 'gstinBuyer';
+                                _sortAscending = ascending;
+                                _sortInvoices();
+                              });
+                            },
+                          ),
+                          DataColumn(
+                            label: Text("Actions"),
+                            numeric: true,
+                          ),
+                        ],
+                        rows: displayedInvoices.map((invoice) {
+                          return DataRow(
+                            cells: [
+                              DataCell(
+                                Text(
+                                  invoice.invoiceNo,
+                                  style: TextStyle(fontWeight: FontWeight.w500),
                                 ),
                               ),
-                              Visibility(
-                                visible: UserSession.canEdit('Invoice'),
-                                child: IconButton(
-                                  icon: const Icon(Icons.delete, size: 20, color: Colors.red),
-                                  tooltip: "Delete",
-                                  onPressed: () async {
-                                    final confirm = await showDialog(
-                                      context: context,
-                                      builder: (_) => AlertDialog(
-                                        title: const Text("Delete Invoice"),
-                                        content: const Text("Are you sure you want to delete this invoice?"),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(context, false),
-                                            child: const Text("Cancel"),
-                                          ),
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(context, true),
-                                            child: const Text("Delete"),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                    if (confirm == true) {
-                                      await repo.deleteInvoice(invoice.id!);
-                                      loadInvoices();
-                                    }
-                                  },
+                              DataCell(
+                                Tooltip(
+                                  message: invoice.buyerAddress ?? '',
+                                  child: Text(
+                                    invoice.buyerName,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.picture_as_pdf, size: 20),
-                                tooltip: "Generate PDF",
-                                onPressed: () {
-                                  generateInvoicePDFDesktop(invoice,context); // you’ll define this method
-                                },
+                              DataCell(
+                                Text(
+                                  "₹${NumberFormat("#,##0.00").format(invoice.total)}",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.primaryColor,
+                                  ),
+                                ),
+                              ),
+                              DataCell(Text(invoice.date)),
+                              DataCell(
+                                Text(
+                                  invoice.gstinBuyer,
+                                  style: TextStyle(
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(maxWidth: 150),
+                                  child: Row(
+                                    children: [
+                                      IconButton(
+                                        icon: Icon(Icons.picture_as_pdf, size: 20),
+                                        tooltip: "Generate PDF",
+                                        onPressed: () {
+                                          generateInvoicePDFDesktop(invoice, context);
+                                        },
+                                        padding: EdgeInsets.zero,
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                      if (UserSession.canEdit('Invoice'))
+                                        IconButton(
+                                          icon: Icon(Icons.edit, size: 20, color: Colors.blue),
+                                          tooltip: "Edit",
+                                          onPressed: () async {
+                                            final result = await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => AddInvoice(invoiceToEdit: invoice),
+                                              ),
+                                            );
+                                            if (result == true) loadInvoices();
+                                          },
+                                          padding: EdgeInsets.zero,
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                      if (UserSession.canEdit('Invoice'))
+                                        IconButton(
+                                          icon: Icon(Icons.delete, size: 20, color: Colors.red),
+                                          tooltip: "Delete",
+                                          onPressed: () async {
+                                            final confirm = await showDialog(
+                                              context: context,
+                                              builder: (_) => AlertDialog(
+                                                title: Text("Confirm Deletion"),
+                                                content: Text("Are you sure you want to delete invoice ${invoice.invoiceNo}?"),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(context, false),
+                                                    child: Text("Cancel"),
+                                                  ),
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(context, true),
+                                                    child: Text(
+                                                      "Delete",
+                                                      style: TextStyle(color: Colors.red),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                            if (confirm == true) {
+                                              await repo.deleteInvoice(invoice.id!);
+                                              loadInvoices();
+                                            }
+                                          },
+                                          padding: EdgeInsets.zero,
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ],
-                          )),
-                        ],
-                      );
-                    }).toList(),
+                          );
+                        }).toList(),
+                      ),
+                    ),
                   ),
                 ),
               ),
-
               if (canShowMore)
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  padding: const EdgeInsets.only(top: 16),
                   child: ElevatedButton(
                     onPressed: () {
                       setState(() {
                         itemsToShow = (itemsToShow + 10).clamp(0, filteredInvoices.length);
                       });
                     },
-                    child: const Text("Show More"),
+                    child: Text("Load More (${filteredInvoices.length - itemsToShow} remaining)"),
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                    ),
                   ),
                 ),
             ],
           ),
+        ),
+      ),
+      floatingActionButton: Visibility(
+        visible: UserSession.canCreate('Invoice'),
+        child: FloatingActionButton.extended(
+          icon: Icon(Icons.add),
+          label: Text("New Invoice"),
+          onPressed: () async {
+            final result = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => AddInvoice()),
+            );
+            if (result == true) loadInvoices();
+          },
+          elevation: 4,
         ),
       ),
     );

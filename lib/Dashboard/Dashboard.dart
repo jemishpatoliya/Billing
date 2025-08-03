@@ -1,6 +1,6 @@
-import 'package:Invoxel/Dashboard/Quotation/AddQuotation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:Invoxel/Dashboard/Quotation/AddQuotation.dart';
 import '../Bloc/nav_bloc.dart';
 import '../Library/Widgets/Topbar.dart';
 import '../Library/Widgets/sidebar.dart';
@@ -11,54 +11,106 @@ import 'User/AddUser.dart';
 import '../Master/TransportPage.dart';
 import 'User/AllUsers.dart';
 
-
 class Dashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      body: Row(
-        children: [
-          Sidebar(), // Left panel
-          Expanded(
-            child: Column(
-              children: [
-                Topbar(), // Top bar
-                Expanded(
-                  child: BlocBuilder<NavCubit, String>(
-                    builder: (context, state) {
-                      switch (state) {
-                        case 'transport':
-                          return TransportPage();
-                        case 'customer':
-                          return Customeras();
-                        // case 'supplier':
-                        //   return SupplierPage();
-                        // case 'app_parties':
-                        //   return AppPartiesPage();
-                        // case 'product':
-                        //   return ProductPage();
-                        case 'all_users':
-                          return Allusers();
-                        case 'add_user':
-                          return AddUsers();
-                        case 'add_quotation':
-                          return AddQuotation();
-                        case 'add_invoice':
-                          return AddInvoice();
-                        case 'all_invoice':
-                          return InvoiceList();
-                        default:
-                          return Center(
-                            child: Text(
-                              'Welcome to Dashboard',
-                              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                            ),
-                          );
-                      }
-                    },
+      body: Container(
+        color: isDarkMode ? Colors.grey[900] : Colors.grey[100],
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Sidebar with fixed width
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: 260),
+              child: Sidebar(),
+            ),
+
+            // Main content area
+            Expanded(
+              child: Column(
+                children: [
+                  // Topbar with fixed height
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: 64),
+                    child: Topbar(),
                   ),
-                ),
-              ],
+
+                  // Main content with proper spacing
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      child: BlocBuilder<NavCubit, String>(
+                        builder: (context, state) {
+                          return AnimatedSwitcher(
+                            duration: Duration(milliseconds: 300),
+                            child: _buildPageContent(state, context),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPageContent(String state, BuildContext context) {
+    switch (state) {
+      // case 'transport':
+      //   return TransportPage(key: ValueKey('transport'));
+      // case 'customer':
+      //   return Customeras(key: ValueKey('customer'));
+      case 'all_users':
+        return AllUsers(key: ValueKey('all_users'));
+      case 'add_user':
+        return AddUsers(key: ValueKey('add_user'));
+      // case 'add_quotation':
+      //   return AddQuotation(key: ValueKey('add_quotation'));
+      case 'add_invoice':
+        return AddInvoice(key: ValueKey('add_invoice'));
+      case 'all_invoice':
+        return InvoiceList(key: ValueKey('all_invoice'));
+      default:
+        return _buildDefaultDashboard(context);
+    }
+  }
+
+  Widget _buildDefaultDashboard(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.dashboard,
+            size: 72,
+            color: theme.primaryColor,
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Welcome to Invoxel',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: isDarkMode ? Colors.white : Colors.grey[800],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Select an option from the sidebar to begin',
+            style: TextStyle(
+              fontSize: 16,
+              color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
             ),
           ),
         ],
