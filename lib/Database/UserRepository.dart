@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../Model/InvoiceModel.dart';
 import '../Model/UserModel.dart';
@@ -69,10 +71,28 @@ class UserRepository {
       jurisdiction TEXT,            -- Surat
       signature TEXT,                -- Authorised Signatory
       hsnSac TEXT,   -- new field
-      mm TEXT        -- new field
+      mm TEXT,        -- new field
+      paid_amount REAL,
+      unpaid_amount REAL,
+      size TEXT,
+      isGst INTEGER DEFAULT 0,        -- 0 = false, 1 = true
+      isOnline INTEGER DEFAULT 0      
       );
     ''');
+
+    await _db.execute('''
+    CREATE TABLE IF NOT EXISTS transport (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  invoice_no TEXT,
+  from_location TEXT,
+  to_location TEXT,
+  cost REAL,
+  summary TEXT
+);
+
+    ''');
     _isInitialized = true;
+
   }
 
   // User functions
@@ -153,6 +173,161 @@ class UserRepository {
   }
   Future<void> deleteUser(int id) async {
     await _db.delete('users', where: 'id = ?', whereArgs: [id]);
+  }
+  Future<InvoiceModel?> getLastInvoice() async {
+    final List<Map<String, dynamic>> maps = await _db.query(
+      'invoices',
+      orderBy: 'id DESC',
+      limit: 1,
+    );
+    if (maps.isNotEmpty) {
+      return InvoiceModel.fromMap(maps.first);
+    }
+    return null;
+  }
+
+  Future<int> getNextInvoiceNumberForToday() async {
+    final today = DateTime.now();
+    final dateStr = "${today.year}${today.month.toString().padLeft(2, '0')}${today.day.toString().padLeft(2, '0')}";
+
+    final result = await _db.rawQuery('''
+    SELECT COUNT(*) as count FROM invoices 
+    WHERE invoice_no LIKE 'INV-$dateStr%'
+  ''');
+
+    int count = (result.first['count'] as int?) ?? 0;
+    return count + 1;
+  }
+
+
+  Future<List<Map<String, dynamic>>> getAllCustomersFromInvoices({
+    String? name,
+    String? mobile,
+    String? poNumber,
+  }) async {
+    String whereClause = '';
+    List<String> whereArgs = [];
+
+    if (name != null && name.isNotEmpty) {
+      whereClause += 'buyer_name LIKE ?';
+      whereArgs.add('%$name%');
+    }
+
+    if (mobile != null && mobile.isNotEmpty) {
+      if (whereClause.isNotEmpty) whereClause += ' AND ';
+      whereClause += 'mobile_no LIKE ?';
+      whereArgs.add('%$mobile%');
+    }
+
+    if (poNumber != null && poNumber.isNotEmpty) {
+      if (whereClause.isNotEmpty) whereClause += ' AND ';
+      whereClause += 'po_number LIKE ?';
+      whereArgs.add('%$poNumber%');
+    }
+
+    final result = await _db.rawQuery('''
+    SELECT 
+      buyer_name,
+      buyer_address,
+      gstin_buyer,
+      mobile_no,
+      po_number,
+      MAX(invoice_no) AS invoice_no,
+      MAX(date) AS invoice_date,   -- This is saved invoice date
+      SUM(total) AS total_amount,
+      SUM(paid_amount) AS total_paid,
+      SUM(total) - SUM(paid_amount) AS total_unpaid
+    FROM invoices
+    ${whereClause.isNotEmpty ? 'WHERE $whereClause' : ''}
+    GROUP BY buyer_name, buyer_address, gstin_buyer, mobile_no, po_number
+    ORDER BY buyer_name ASC
+  ''', whereArgs);
+
+    return result;
+  }
+  Future<List<String>> getAllBuyerNames() async {
+    final result = await _db.rawQuery('''
+    SELECT DISTINCT buyer_name FROM invoices WHERE buyer_name IS NOT NULL ORDER BY buyer_name
+  ''');
+    return result.map((e) => e['buyer_name'] as String).toList();
+  }
+
+  Future<Map<String, dynamic>?> fetchCustomerByName(String name) async {
+    final result = await _db.query(
+      'invoices',
+      where: 'buyer_name = ?',
+      whereArgs: [name],
+      orderBy: 'date DESC',
+      limit: 1,
+    );
+    if (result.isNotEmpty) return result.first;
+    return null;
+  }
+
+  Future<List<Map<String, dynamic>>> getAllProducts() async {
+    // Get all invoices with relevant columns
+    final invoices = await _db.query(
+      'invoices',
+      columns: [
+        'product_details',
+        'total',
+        'paid_amount',
+        'unpaid_amount',
+        'subtotal',
+        'invoice_no',
+        'buyer_name',
+        'mobile_no',
+        'date',
+      ],
+    );
+
+    List<Map<String, dynamic>> allProducts = [];
+
+    for (var invoice in invoices) {
+      final productDetailsJson = invoice['product_details'];
+      if (productDetailsJson != null && productDetailsJson is String) {
+        try {
+          final List<dynamic> productsList = jsonDecode(productDetailsJson);
+
+          for (var prod in productsList) {
+            if (prod is Map<String, dynamic>) {
+              // Merge product details + invoice-level fields
+              Map<String, dynamic> productWithInvoiceData = {
+                ...prod,  // all product fields
+                'total_invoice': invoice['total'],
+                'paid_amount': invoice['paid_amount'],
+                'unpaid_amount': invoice['unpaid_amount'],
+                'subtotal_invoice': invoice['subtotal'],
+                'invoice_no': invoice['invoice_no'],
+                'buyer_name': invoice['buyer_name'],
+                'mobile_no': invoice['mobile_no'],
+                'invoice_date': invoice['date'],
+              };
+              allProducts.add(productWithInvoiceData);
+            }
+          }
+        } catch (e) {
+          print('Error parsing product_details JSON: $e');
+        }
+      }
+    }
+
+    return allProducts;
+  }
+
+  // Insert a new transport record
+  Future<void> addTransport(Map<String, dynamic> transport) async {
+    await _db.insert('transport', transport);
+  }
+
+// Fetch all transport records
+  Future<List<Map<String, dynamic>>> getAllTransport() async {
+    return await _db.query('transport', orderBy: 'id DESC');
+  }
+  Future<String> generateNextTransportInvoiceNumber() async {
+    final result = await _db.rawQuery('SELECT MAX(id) as maxId FROM transport');
+    int maxId = (result.first['maxId'] as int?) ?? 0;
+    return 'TR-${maxId + 1}'.padLeft(6, '0');  // Example: TR-000001
   }
 
 

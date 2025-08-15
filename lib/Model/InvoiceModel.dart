@@ -28,6 +28,11 @@ class InvoiceModel {
   String? signature;
   final String? hsnSac;
   final String? mm;
+  double? paid_amount;
+  double? unpaid_amount;
+  String? size;
+  bool? isGst;
+  bool? isOnline;
 
   InvoiceModel({
     this.id,
@@ -59,6 +64,11 @@ class InvoiceModel {
     this.signature,
     this.hsnSac,   // new
     this.mm,
+    this.paid_amount,
+    this.unpaid_amount,
+    this.size,
+    this.isGst,
+    this.isOnline,
   });
 
   Map<String, dynamic> toJson() => {
@@ -91,6 +101,11 @@ class InvoiceModel {
     'signature': signature,
     'hsnSac': hsnSac,  // new
     'mm': mm,          // new
+    'paid_amount': paid_amount,          // new
+    'unpaid_amount': unpaid_amount,          // new
+    'size': size,          // new
+    'isGst': isGst == true ? 1 : 0,       // store as int 0 or 1
+    'isOnline': isOnline == true ? 1 : 0, // store as int 0 or 1    // new
   };
 
   factory InvoiceModel.fromMap(Map<String, dynamic> map) {
@@ -124,6 +139,11 @@ class InvoiceModel {
       signature: map['signature'],
       hsnSac: map['hsnSac'],   // new
       mm: map['mm'],
+      paid_amount: map['paid_amount'],
+      unpaid_amount: map['unpaid_amount'],
+      size: map['size'],
+      isGst: (map['isGst'] ?? 0) == 1,     // convert int 0/1 to bool
+      isOnline: (map['isOnline'] ?? 0) == 1, // convert int 0/1 to bool
     );
   }
 }

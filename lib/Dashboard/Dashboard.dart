@@ -4,11 +4,12 @@ import 'package:Invoxel/Dashboard/Quotation/AddQuotation.dart';
 import '../Bloc/nav_bloc.dart';
 import '../Library/Widgets/Topbar.dart';
 import '../Library/Widgets/sidebar.dart';
-import '../Master/Customer.dart';
 import 'Invoice/AddInvoice.dart';
 import 'Invoice/AllInvoice.dart';
+import 'Master/Customer.dart';
+import 'Master/Product.dart';
+import 'Master/Transport.dart';
 import 'User/AddUser.dart';
-import '../Master/TransportPage.dart';
 import 'User/AllUsers.dart';
 
 class Dashboard extends StatelessWidget {
@@ -52,7 +53,7 @@ class Dashboard extends StatelessWidget {
                         },
                       ),
                     ),
-                  ),
+                   ),
                 ],
               ),
             ),
@@ -64,10 +65,10 @@ class Dashboard extends StatelessWidget {
 
   Widget _buildPageContent(String state, BuildContext context) {
     switch (state) {
-      // case 'transport':
-      //   return TransportPage(key: ValueKey('transport'));
-      // case 'customer':
-      //   return Customeras(key: ValueKey('customer'));
+      case 'transport':
+        return AddTransport(key: ValueKey('transport'));
+      case 'customer':
+        return CustomerList(key: ValueKey('customer'));
       case 'all_users':
         return AllUsers(key: ValueKey('all_users'));
       case 'add_user':
@@ -78,6 +79,8 @@ class Dashboard extends StatelessWidget {
         return AddInvoice(key: ValueKey('add_invoice'));
       case 'all_invoice':
         return InvoiceList(key: ValueKey('all_invoice'));
+      case 'product':
+        return ProductList(key: ValueKey('product'));
       default:
         return _buildDefaultDashboard(context);
     }
