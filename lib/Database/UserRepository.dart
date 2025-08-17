@@ -1,7 +1,11 @@
 import 'dart:convert';
-
+import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../Model/InvoiceModel.dart';
+import 'package:path_provider/path_provider.dart';
+import '../Model/ProductModel.dart';
+import '../Model/PurchaseModel.dart';
 import '../Model/UserModel.dart';
 
 class UserRepository {
@@ -15,7 +19,13 @@ class UserRepository {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
 
-    _db = await databaseFactory.openDatabase('Invoxel.db');
+    // ✅ Get a safe folder for the DB
+    Directory appDocDir = await getApplicationDocumentsDirectory();
+    String dbPath = p.join(appDocDir.path, 'Invoxel.db');
+
+    print("📂 Database path: $dbPath");
+
+    _db = await databaseFactory.openDatabase(dbPath); // ✅ Correct
 
     // User table (keep as is)
     await _db.execute('''
@@ -91,6 +101,41 @@ class UserRepository {
 );
 
     ''');
+
+    await _db.execute('''
+CREATE TABLE IF NOT EXISTS purchases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,        -- unique row id
+  purchase_id TEXT,                             -- unique purchase id
+  invoice_no TEXT,                              -- invoice number
+  created_at TEXT DEFAULT (datetime('now')),    -- creation timestamp
+  company_name TEXT,
+  company_address TEXT,
+  company_gstin TEXT,
+  company_email TEXT,
+  
+  products TEXT,                                -- JSON string of all products in this purchase
+  product_id TEXT,                              -- unique product id
+  product_name TEXT,
+  hsn_sac TEXT,
+  mm TEXT,
+  rate REAL,
+  colour TEXT,
+  colour_code TEXT,
+  per TEXT,
+  total REAL,
+  gst REAL,
+  packing_forwarding REAL,
+
+  final_amount REAL,
+  dispatch_from TEXT,
+  ship_to TEXT,
+  pdf_path TEXT,
+  skuItems TEXT
+);
+
+''');
+
+
     _isInitialized = true;
 
   }
@@ -330,5 +375,152 @@ class UserRepository {
     return 'TR-${maxId + 1}'.padLeft(6, '0');  // Example: TR-000001
   }
 
+  Future<int> getNextAvailableSKUNumber() async {
+    // Get all purchases ordered by ID (creation order) and find the highest SKU number
+    final purchases = await getAllPurchases();
+    int maxSkuNumber = 0;
+    
+    print('🔍 Checking ${purchases.length} purchases for existing SKUs...');
+    
+    // Sort purchases by ID to ensure proper order
+    purchases.sort((a, b) => (a.id ?? '0').compareTo(b.id ?? '0'));
+    
+    for (var purchase in purchases) {
+      if (purchase.skuItems != null) {
+        print('📋 Purchase ${purchase.invoiceNo} (ID: ${purchase.id}): ${purchase.skuItems!.length} SKU items');
+        
+        for (var skuItem in purchase.skuItems!) {
+          final sku = skuItem['sku'] as String?;
+          if (sku != null && sku.startsWith('SK')) {
+            try {
+              final skuNumber = int.tryParse(sku.substring(2));
+              if (skuNumber != null && skuNumber > maxSkuNumber) {
+                maxSkuNumber = skuNumber;
+                print('🏆 New highest SKU found: $sku (number: $skuNumber)');
+              }
+            } catch (e) {
+              print('❌ Error parsing SKU: $sku - $e');
+            }
+          }
+        }
+      }
+    }
+    
+    final nextNumber = maxSkuNumber + 1;
+    print('🎯 Next available SKU number: $nextNumber (current max: $maxSkuNumber)');
+    
+    return nextNumber;
+  }
 
+  Future<int> getNextSKUNumberForPurchase(String purchaseId) async {
+    // Get all purchases ordered by ID (creation order)
+    final purchases = await getAllPurchases();
+    int currentSkuNumber = 1;
+    
+    // Sort purchases by ID to ensure proper order
+    purchases.sort((a, b) => (a.id ?? '0').compareTo(b.id ?? '0'));
+    
+    // Find the target purchase and calculate SKU number
+    for (var purchase in purchases) {
+      if (purchase.purchaseId == purchaseId) {
+        // Found the target purchase, return the current SKU number
+        print('🎯 Found purchase $purchaseId, starting SKU from: $currentSkuNumber');
+        return currentSkuNumber;
+      }
+      
+      // Add up SKUs from previous purchases
+      if (purchase.products != null) {
+        for (var prod in purchase.products!) {
+          int qty = prod.qty ?? 0;
+          currentSkuNumber += qty;
+        }
+      }
+    }
+    
+    // If purchase not found, return the next available number
+    return await getNextAvailableSKUNumber();
+  }
+
+  Future<void> resetAllSKUNumbers() async {
+    // Get all purchases ordered by ID (creation order)
+    final purchases = await getAllPurchases();
+    int currentSkuNumber = 1;
+    
+    print('🔄 Resetting all SKU numbers across ${purchases.length} purchases...');
+    
+    // Sort purchases by ID to ensure proper order
+    purchases.sort((a, b) => (a.id ?? '0').compareTo(b.id ?? '0'));
+    
+    for (var purchase in purchases) {
+      if (purchase.products != null) {
+        print('📦 Processing purchase: ${purchase.invoiceNo} (ID: ${purchase.id})');
+        List<Map<String, dynamic>> newSkuItems = [];
+        
+        for (var prod in purchase.products!) {
+          int qty = prod.qty ?? 0;
+          print('  📋 Product: ${prod.productName}, Quantity: $qty');
+          
+          for (int i = 0; i < qty; i++) {
+            String sku = "SK${currentSkuNumber.toString().padLeft(8, '0')}";
+            newSkuItems.add({
+              "product": prod,
+              "sku": sku,
+              "index": i + 1,
+            });
+            print('    ✅ Generated SKU: $sku for item ${i + 1}');
+            currentSkuNumber++;
+          }
+        }
+        
+        // Update purchase with new SKUs
+        purchase.skuItems = newSkuItems;
+        await updatePurchase(purchase);
+        print('💾 Updated purchase ${purchase.invoiceNo} with ${newSkuItems.length} SKUs');
+      }
+    }
+    
+    print('🎯 Reset complete! Total SKUs generated: ${currentSkuNumber - 1}');
+  }
+
+  Future<void> addPurchase(PurchaseModel purchase) async {
+    final data = purchase.toMap();
+    data['products'] = jsonEncode(purchase.products?.map((p) => p.toMap()).toList() ?? []);
+    await _db.insert('purchases', data);
+  }
+
+  Future<void> updatePurchase(PurchaseModel purchase) async {
+    final data = purchase.toMap();
+    data['products'] = jsonEncode(purchase.products?.map((p) => p.toMap()).toList() ?? []);
+    await _db.update(
+      'purchases',
+      data,
+      where: 'purchase_id = ?',
+      whereArgs: [purchase.purchaseId],
+    );
+  }
+
+  Future<List<PurchaseModel>> getAllPurchases() async {
+    final result = await _db.query('purchases', orderBy: "id ASC"); // Changed to ASC to get oldest first
+    return result.map((row) {
+      final productsJson = row['products'] as String?;
+      final productsList = productsJson != null
+          ? (jsonDecode(productsJson) as List).map((p) => PurchaseProduct.fromMap(p)).toList()
+          : [];
+      return PurchaseModel.fromMap({...row, 'products': productsList});
+    }).toList();
+  }
+
+  Future<List<PurchaseModel>> getAllPurchasesForUI() async {
+    final result = await _db.query('purchases', orderBy: "id DESC"); // DESC for UI (newest first)
+    return result.map((row) {
+      final productsJson = row['products'] as String?;
+      final productsList = productsJson != null
+          ? (jsonDecode(productsJson) as List).map((p) => PurchaseProduct.fromMap(p)).toList()
+          : [];
+      return PurchaseModel.fromMap({...row, 'products': productsList});
+    }).toList();
+  }
 }
+
+
+

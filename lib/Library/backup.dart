@@ -1,10 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 Future<void> backupDatabaseDesktop(BuildContext context) async {
   try {
     // If your DB is in app's current directory
-    final dbFile = File('Invoxel.db');
+    Directory appDocDir = await getApplicationDocumentsDirectory();
+    final dbFile = File(p.join(appDocDir.path, 'Invoxel.db'));
 
     if (!await dbFile.exists()) {
       ScaffoldMessenger.of(context).showSnackBar(

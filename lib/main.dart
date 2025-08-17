@@ -6,6 +6,7 @@ import 'Authentication/Register.dart';
 import 'Authentication/Login.dart';
 import 'Bloc/RegisterBloc.dart';
 import 'Bloc/nav_bloc.dart';
+import 'Dashboard/Purchase/PurchaseList.dart';
 import 'Dashboard/Quotation/AddQuotation.dart';
 import 'Dashboard/User/AddUser.dart';
 import 'Dashboard/Dashboard.dart';
@@ -47,7 +48,6 @@ void main() async {
       await prefs.remove('loggedInUserJson'); // clear stale JSON also
     }
   }
-
   runApp(MyApp(userRepo, isLoggedIn));
 }
 

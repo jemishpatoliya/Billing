@@ -228,7 +228,7 @@ class _SidebarState extends State<Sidebar> {
                       context,
                       icon: Icons.list_alt_outlined,
                       title: 'All Purchases',
-                      onTap: () => navCubit.changePage('all_purchases'),
+                      onTap: () => navCubit.changePage('purchaseList'),
                       isNested: true,
                     ),
                   ],

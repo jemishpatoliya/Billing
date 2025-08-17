@@ -1,3 +1,4 @@
+import 'package:Invoxel/Dashboard/Purchase/AddPurchase.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:Invoxel/Dashboard/Quotation/AddQuotation.dart';
@@ -9,6 +10,7 @@ import 'Invoice/AllInvoice.dart';
 import 'Master/Customer.dart';
 import 'Master/Product.dart';
 import 'Master/Transport.dart';
+import 'Purchase/PurchaseList.dart';
 import 'User/AddUser.dart';
 import 'User/AllUsers.dart';
 
@@ -81,6 +83,10 @@ class Dashboard extends StatelessWidget {
         return InvoiceList(key: ValueKey('all_invoice'));
       case 'product':
         return ProductList(key: ValueKey('product'));
+      case 'add_purchase':
+        return AddPurchase(key: ValueKey('add_purchase'));
+        case 'purchaseList':
+        return PurchaseList(key: ValueKey('purchaseList'));
       default:
         return _buildDefaultDashboard(context);
     }
