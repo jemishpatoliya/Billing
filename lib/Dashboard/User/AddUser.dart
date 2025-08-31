@@ -1,5 +1,5 @@
-import 'dart:convert';
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../Database/UserRepository.dart';
 import '../../Model/UserModel.dart';
@@ -13,6 +13,7 @@ class AddUsers extends StatefulWidget {
 }
 
 class _AddUsersState extends State<AddUsers> {
+
   final _formKey = GlobalKey<FormState>();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
@@ -446,7 +447,7 @@ class _AddUsersState extends State<AddUsers> {
     if (_formKey.currentState!.validate()) {
       final user = UserModel(
         id: widget.user?.id,
-        shopName: 'Demo Shop',
+        shopName: usernameController.text,
         username: usernameController.text,
         address: addressController.text,
         email: emailController.text,

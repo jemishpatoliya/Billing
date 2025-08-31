@@ -4,7 +4,6 @@ import '../Library/UserSession.dart';
 import '../Model/UserModel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// EVENTS
 sealed class LoginEvent {}
 
 final class SubmitLoginEvent extends LoginEvent {

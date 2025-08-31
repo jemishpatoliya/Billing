@@ -7,6 +7,8 @@ import 'package:path_provider/path_provider.dart';
 import '../Model/ProductModel.dart';
 import '../Model/PurchaseModel.dart';
 import '../Model/UserModel.dart';
+import '../Model/StockModel.dart';
+import '../Model/StockTransactionModel.dart';
 
 class UserRepository {
   late Database _db;
@@ -135,6 +137,41 @@ CREATE TABLE IF NOT EXISTS purchases (
 
 ''');
 
+    // Stock management table
+    await _db.execute('''
+CREATE TABLE IF NOT EXISTS stock (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_name TEXT NOT NULL,
+  hsn_sac TEXT,
+  mm TEXT,
+  size TEXT NOT NULL,
+  quantity INTEGER DEFAULT 0,
+  rate REAL,
+  colour TEXT,
+  colour_code TEXT,
+  per TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(product_name, size, colour)
+);
+''');
+
+    // Stock transactions table for tracking all movements
+    await _db.execute('''
+CREATE TABLE IF NOT EXISTS stock_transactions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  stock_id TEXT,
+  product_name TEXT NOT NULL,
+  size TEXT NOT NULL,
+  quantity INTEGER NOT NULL,
+  transaction_type TEXT NOT NULL,
+  reference_id TEXT,
+  reference_type TEXT,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  created_by TEXT
+);
+''');
 
     _isInitialized = true;
 
@@ -216,9 +253,11 @@ CREATE TABLE IF NOT EXISTS purchases (
       whereArgs: [id],
     );
   }
+
   Future<void> deleteUser(int id) async {
     await _db.delete('users', where: 'id = ?', whereArgs: [id]);
   }
+
   Future<InvoiceModel?> getLastInvoice() async {
     final List<Map<String, dynamic>> maps = await _db.query(
       'invoices',
@@ -243,7 +282,6 @@ CREATE TABLE IF NOT EXISTS purchases (
     int count = (result.first['count'] as int?) ?? 0;
     return count + 1;
   }
-
 
   Future<List<Map<String, dynamic>>> getAllCustomersFromInvoices({
     String? name,
@@ -290,6 +328,7 @@ CREATE TABLE IF NOT EXISTS purchases (
 
     return result;
   }
+
   Future<List<String>> getAllBuyerNames() async {
     final result = await _db.rawQuery('''
     SELECT DISTINCT buyer_name FROM invoices WHERE buyer_name IS NOT NULL ORDER BY buyer_name
@@ -369,6 +408,7 @@ CREATE TABLE IF NOT EXISTS purchases (
   Future<List<Map<String, dynamic>>> getAllTransport() async {
     return await _db.query('transport', orderBy: 'id DESC');
   }
+
   Future<String> generateNextTransportInvoiceNumber() async {
     final result = await _db.rawQuery('SELECT MAX(id) as maxId FROM transport');
     int maxId = (result.first['maxId'] as int?) ?? 0;
@@ -441,47 +481,6 @@ CREATE TABLE IF NOT EXISTS purchases (
     return await getNextAvailableSKUNumber();
   }
 
-  Future<void> resetAllSKUNumbers() async {
-    // Get all purchases ordered by ID (creation order)
-    final purchases = await getAllPurchases();
-    int currentSkuNumber = 1;
-    
-    print('🔄 Resetting all SKU numbers across ${purchases.length} purchases...');
-    
-    // Sort purchases by ID to ensure proper order
-    purchases.sort((a, b) => (a.id ?? '0').compareTo(b.id ?? '0'));
-    
-    for (var purchase in purchases) {
-      if (purchase.products != null) {
-        print('📦 Processing purchase: ${purchase.invoiceNo} (ID: ${purchase.id})');
-        List<Map<String, dynamic>> newSkuItems = [];
-        
-        for (var prod in purchase.products!) {
-          int qty = prod.qty ?? 0;
-          print('  📋 Product: ${prod.productName}, Quantity: $qty');
-          
-          for (int i = 0; i < qty; i++) {
-            String sku = "SK${currentSkuNumber.toString().padLeft(8, '0')}";
-            newSkuItems.add({
-              "product": prod,
-              "sku": sku,
-              "index": i + 1,
-            });
-            print('    ✅ Generated SKU: $sku for item ${i + 1}');
-            currentSkuNumber++;
-          }
-        }
-        
-        // Update purchase with new SKUs
-        purchase.skuItems = newSkuItems;
-        await updatePurchase(purchase);
-        print('💾 Updated purchase ${purchase.invoiceNo} with ${newSkuItems.length} SKUs');
-      }
-    }
-    
-    print('🎯 Reset complete! Total SKUs generated: ${currentSkuNumber - 1}');
-  }
-
   Future<void> addPurchase(PurchaseModel purchase) async {
     final data = purchase.toMap();
     data['products'] = jsonEncode(purchase.products?.map((p) => p.toMap()).toList() ?? []);
@@ -519,6 +518,237 @@ CREATE TABLE IF NOT EXISTS purchases (
           : [];
       return PurchaseModel.fromMap({...row, 'products': productsList});
     }).toList();
+  }
+
+  // Add stock item
+  Future<void> addStock(StockModel stock) async {
+    final data = stock.toMap();
+    data.remove('id'); // Remove ID for new insert
+    data['created_at'] = DateTime.now().toIso8601String();
+    data['updated_at'] = DateTime.now().toIso8601String();
+    
+    await _db.insert('stock', data);
+  }
+
+  // Update stock quantity
+  Future<void> updateStockQuantity(String productName, String size, int quantity, {String? colour}) async {
+    String whereClause = 'product_name = ? AND size = ?';
+    List<String> whereArgs = [productName, size];
+    
+    if (colour != null) {
+      whereClause += ' AND colour = ?';
+      whereArgs.add(colour);
+    }
+    
+    await _db.update(
+      'stock',
+      {
+        'quantity': quantity,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: whereClause,
+      whereArgs: whereArgs,
+    );
+  }
+
+  // Get stock by product name and size
+  Future<StockModel?> getStockByProductAndSize(String productName, String size, {String? colour}) async {
+    try {
+      print('Getting stock for product: $productName, size: $size, colour: $colour');
+      
+      String whereClause = 'product_name = ? AND size = ?';
+      List<String> whereArgs = [productName, size];
+      
+      if (colour != null && colour.isNotEmpty) {
+        whereClause += ' AND colour = ?';
+        whereArgs.add(colour);
+      }
+    
+      final result = await _db.query(
+        'stock',
+        where: whereClause,
+        whereArgs: whereArgs,
+      );
+      
+      print('Query result: ${result.length} items found');
+      
+      if (result.isNotEmpty) {
+        print('Stock found: ${result.first}');
+        return StockModel.fromMap(result.first);
+      } else {
+        print('No stock found for $productName with size $size');
+        
+        // If no exact match found, try to find any stock for this product
+        final anyStock = await _db.query(
+          'stock',
+          where: 'product_name = ?',
+          whereArgs: [productName],
+          limit: 1
+        );
+        
+        if (anyStock.isNotEmpty) {
+          print('Found alternative stock for $productName: ${anyStock.first}');
+          return StockModel.fromMap(anyStock.first);
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Error getting stock: $e');
+      return null;
+    }
+  }
+
+  // Add stock transaction
+  Future<void> addStockTransaction(StockTransactionModel transaction) async {
+    final data = transaction.toMap();
+    data.remove('id');
+    data['created_at'] = DateTime.now().toIso8601String();
+    
+    await _db.insert('stock_transactions', data);
+  }
+
+  // Process stock purchase (increase stock when purchase is added)
+  Future<void> processStockPurchase(String productName, String size, int quantity, String purchaseId, {
+    String? hsnSac,
+    String? mm,
+    double? rate,
+    String? colour,
+    String? colourCode,
+    String? per,
+  }) async {
+    // Check if stock item exists
+    StockModel? existingStock = await getStockByProductAndSize(productName, size, colour: colour);
+    int newQuantity = 0;
+    String? stockId;
+    
+    if (existingStock != null) {
+      // Update existing stock
+      stockId = existingStock.id;
+      newQuantity = (existingStock.quantity ?? 0) + quantity;
+      await updateStockQuantity(productName, size, newQuantity, colour: colour);
+      
+      // Update rate if provided and different
+      if (rate != null && rate != existingStock.rate) {
+        await _db.update(
+          'stock',
+          {'rate': rate, 'updated_at': DateTime.now().toIso8601String()},
+          where: 'id = ?',
+          whereArgs: [existingStock.id],
+        );
+      }
+    } else {
+      // Create new stock item
+      final newStock = StockModel(
+        productName: productName,
+        hsnSac: hsnSac,
+        mm: mm,
+        size: size,
+        quantity: quantity,
+        rate: rate,
+        colour: colour,
+        colourCode: colourCode,
+        per: per,
+      );
+      await addStock(newStock);
+      
+      // Get the ID of the newly added stock
+      final addedStock = await getStockByProductAndSize(productName, size, colour: colour);
+      stockId = addedStock?.id;
+      newQuantity = quantity;
+    }
+    
+    // Record transaction with more details
+    final transaction = StockTransactionModel(
+      stockId: stockId?.toString(), // Convert int? to String?
+      productName: productName,
+      size: size,
+      quantity: quantity,
+      rate: rate,
+      colour: colour,
+      transactionType: TransactionType.purchase,
+      referenceId: purchaseId,
+      referenceType: 'purchase',
+      notes: 'Added from purchase $purchaseId',
+      createdAt: DateTime.now(),
+    );
+    
+    await addStockTransaction(transaction);
+    
+    print('📊 Stock Transaction: PURCHASE - $productName ($size) - Qty: $quantity - Purchase: $purchaseId');
+    print('📦 Updated Stock: $productName ($size) - New Qty: $newQuantity');
+  }
+
+  Future<List<Map<String, dynamic>>> getProductsWithStockFromPurchases() async {
+    try {
+      final purchases = await getAllPurchases();
+      Map<String, Map<String, dynamic>> productSizeMap = {};
+
+      // Collect all products with their sizes and total quantities from purchases
+      for (var purchase in purchases) {
+        for (var product in purchase.products ?? []) {
+          if (product.productName != null && product.productName!.isNotEmpty) {
+            String productName = product.productName!;
+            String size = product.mm?.replaceAll('*', '×') ?? '1×1';
+            String key = '${productName}_$size';
+
+            if (productSizeMap.containsKey(key)) {
+              productSizeMap[key]!['total_purchased'] =
+                  (productSizeMap[key]!['total_purchased'] as int) + (product.qty ?? 0);
+            } else {
+              productSizeMap[key] = {
+                'product_name': productName,
+                'size': size,
+                'hsn_sac': product.hsnSac ?? '',
+                'mm': product.mm ?? '',
+                'rate': product.rate ?? 0.0,
+                'colour': product.colour ?? '',
+                'colour_code': product.colourCode ?? '',
+                'per': product.per ?? '',
+                'total_purchased': product.qty ?? 0,
+                'available_stock': 0, // Will be calculated below
+              };
+            }
+          }
+        }
+      }
+
+      // Now get sold quantities from invoices
+      final invoices = await getAllInvoices();
+      Map<String, int> soldQuantities = {};
+
+      for (var invoice in invoices) {
+        if (invoice.productDetails.isNotEmpty) {
+          try {
+            final List<dynamic> productsList = jsonDecode(invoice.productDetails);
+            for (var prod in productsList) {
+              if (prod is Map<String, dynamic>) {
+                String productName = prod['product'] ?? '';
+                String size = invoice.size?.replaceAll('*', '×') ?? '1×1';
+                String key = '${productName}_$size';
+                int qty = prod['qty'] ?? 0;
+
+                soldQuantities[key] = (soldQuantities[key] ?? 0) + qty;
+              }
+            }
+          } catch (e) {
+            print('Error parsing invoice products: $e');
+          }
+        }
+      }
+
+      // Calculate available stock
+      for (String key in productSizeMap.keys) {
+        int totalPurchased = productSizeMap[key]!['total_purchased'];
+        int totalSold = soldQuantities[key] ?? 0;
+        productSizeMap[key]!['available_stock'] = totalPurchased - totalSold;
+        productSizeMap[key]!['total_sold'] = totalSold;
+      }
+
+      return productSizeMap.values.toList();
+    } catch (e) {
+      print('Error getting products with stock: $e');
+      return [];
+    }
   }
 }
 

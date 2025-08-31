@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import '../../Database/UserRepository.dart';
 import '../../Library/UserSession.dart';
 import '../../Model/InvoiceModel.dart';
-import 'AllInvoice.dart';
+import '../../Model/StockModel.dart';
 
 class AddInvoice extends StatefulWidget {
   final InvoiceModel? invoiceToEdit;
@@ -22,15 +22,10 @@ class _AddInvoiceState extends State<AddInvoice> {
 
   // Controllers for InvoiceModel fields
   final TextEditingController invoiceNoCtrl = TextEditingController();
-  final TextEditingController dateCtrl = TextEditingController(
-    text: DateFormat("dd/MM/yyyy").format(DateTime.now()),
-  );
-  // final TextEditingController yourFirmCtrl = TextEditingController();
-  // final TextEditingController yourFirmAddressCtrl = TextEditingController();
+  final TextEditingController dateCtrl = TextEditingController(text: DateFormat("dd/MM/yyyy").format(DateTime.now()),);
   final TextEditingController buyerNameCtrl = TextEditingController();
   final TextEditingController buyerAddressCtrl = TextEditingController();
   final TextEditingController placeOfSupplyCtrl = TextEditingController();
-  // final TextEditingController gstinSupplierCtrl = TextEditingController();
   final TextEditingController gstinBuyerCtrl = TextEditingController();
   final TextEditingController poNumberCtrl = TextEditingController();
   final TextEditingController mobileNoCtrl = TextEditingController();
@@ -57,23 +52,22 @@ class _AddInvoiceState extends State<AddInvoice> {
   );
 
   List<Map<String, dynamic>> products = [];
+  List<StockModel> availableStock = [];
+  List<String> availableProducts = [];
+  Map<String, List<StockModel>> productStockMap = {};
 
   bool get isEditMode => widget.invoiceToEdit != null;
 
   Future<String> _generateInvoiceNumber() async {
-    // Get the last invoice number from database
     final lastInvoice = await repo.getLastInvoice();
 
     if (lastInvoice == null) {
-      // If no invoices exist, start with 1
       return 'INV-${DateFormat('yyyyMM').format(DateTime.now())}-0001';
     }
 
-    // Extract the sequence number from the last invoice
     final parts = lastInvoice.invoiceNo.split('-');
     final lastNumber = int.tryParse(parts.last) ?? 0;
 
-    // Generate new invoice number with incremented sequence
     return 'INV-${DateFormat('yyyyMM').format(DateTime.now())}-${(lastNumber + 1).toString().padLeft(4, '0')}';
   }
 
@@ -85,18 +79,451 @@ class _AddInvoiceState extends State<AddInvoice> {
     } else {
       addEmptyProduct();
     }
+    _loadStockData();
+  }
+
+  Future<void> _loadStockData() async {
+    try {
+      final repo = UserRepository();
+
+      final productsWithStock = await repo.getProductsWithStockFromPurchases();
+
+      print('Products with stock loaded: ${productsWithStock.length}');
+
+      availableProducts.clear();
+      productStockMap.clear();
+      availableStock.clear();
+
+      Set<String> uniqueProducts = {};
+
+      for (var item in productsWithStock) {
+        String productName = item['product_name'];
+        uniqueProducts.add(productName);
+
+        StockModel stockModel = StockModel(
+          productName: productName,
+          size: item['size'],
+          quantity: item['available_stock'],
+          rate: item['rate']?.toDouble(),
+          hsnSac: item['hsn_sac'],
+          mm: item['mm'],
+          colour: item['colour'],
+          colourCode: item['colour_code'],
+          per: item['per'],
+        );
+
+        availableStock.add(stockModel);
+
+        if (!productStockMap.containsKey(productName)) {
+          productStockMap[productName] = [];
+        }
+        productStockMap[productName]!.add(stockModel);
+      }
+
+      availableProducts = uniqueProducts.toList()..sort();
+
+      if (availableProducts.isEmpty) {
+        availableProducts = ['No products available'];
+        productStockMap['No products available'] = [];
+      }
+
+      print('Available products loaded: ${availableProducts.length}');
+      for (String product in availableProducts) {
+        print('- $product: ${productStockMap[product]?.length ?? 0} sizes');
+      }
+
+      setState(() {});
+    } catch (e) {
+      print('Error loading stock data: $e');
+      availableProducts = ['No products available'];
+      productStockMap.clear();
+      productStockMap['No products available'] = [];
+      setState(() {});
+    }
+  }
+
+  void onProductSelected(String productName, int productIndex) {
+    print('onProductSelected called with productName: $productName, index: $productIndex');
+
+    if (productName.isEmpty || productName.trim().isEmpty) {
+      print('Empty product name');
+      setState(() {
+        products[productIndex]['product'] = '';
+        products[productIndex]['hsnSac'] = '';
+        products[productIndex]['mm'] = '';
+        products[productIndex]['rate'] = 0.0;
+        products[productIndex]['price'] = 0.0;
+        products[productIndex]['colour'] = '';
+        products[productIndex]['size'] = '';
+        products[productIndex]['qty'] = 0;
+        products[productIndex]['selectedStock'] = null;
+      });
+      return;
+    }
+
+    if (productName == 'No products available') {
+      print('No products available selected');
+      setState(() {
+        products[productIndex]['product'] = productName;
+        products[productIndex]['hsnSac'] = '';
+        products[productIndex]['mm'] = '';
+        products[productIndex]['rate'] = 0.0;
+        products[productIndex]['colour'] = '';
+        products[productIndex]['size'] = '0×0';
+        products[productIndex]['qty'] = 0;
+        products[productIndex]['price'] = 0.0;
+        products[productIndex]['amount'] = 0.0;
+        products[productIndex]['selectedStock'] = null;
+      });
+      return;
+    }
+
+    final stockItems = productStockMap[productName] ?? [];
+    print('Stock items for $productName: ${stockItems.length}');
+
+    setState(() {
+      products[productIndex]['product'] = productName;
+      products[productIndex]['availableStocks'] = stockItems;
+
+      // Clear previous selection but keep product name
+      products[productIndex]['hsnSac'] = '';
+      products[productIndex]['mm'] = '';
+      products[productIndex]['rate'] = 0.0;
+      products[productIndex]['price'] = 0.0;
+      products[productIndex]['colour'] = '';
+      products[productIndex]['size'] = '';
+      products[productIndex]['qty'] = 0;
+      products[productIndex]['selectedStock'] = null;
+
+      // Auto-show stock selection dialog if stocks are available
+      if (stockItems.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _showStockSelectionDialog(productIndex);
+        });
+      }
+
+      updateProduct(productIndex);
+    });
+  }
+
+  void _showStockSelectionDialog(int productIndex) async {
+    final productName = products[productIndex]['product'] as String?;
+    if (productName == null || productName.isEmpty || productName == 'No products available') {
+      return;
+    }
+
+    final stockItems = productStockMap[productName] ?? [];
+    if (stockItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No stock available for $productName'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final selectedStock = await showDialog<StockModel>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.9,
+            height: MediaQuery.of(context).size.height * 0.7,
+            child: Column(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.inventory, color: Colors.white),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Select Size & Stock for $productName',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'Choose from available sizes and quantities below:',
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: stockItems.length,
+                    itemBuilder: (context, index) {
+                      final stock = stockItems[index];
+                      final isAvailable = (stock.quantity ?? 0) > 0;
+
+                      return Card(
+                        margin: EdgeInsets.only(bottom: 12),
+                        elevation: isAvailable ? 3 : 1,
+                        color: isAvailable ? null : Colors.grey[50],
+                        child: InkWell(
+                          onTap: isAvailable ? () {
+                            Navigator.of(context).pop(stock);
+                          } : null,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                // Stock Status Icon
+                                Container(
+                                  width: 60,
+                                  height: 60,
+                                  decoration: BoxDecoration(
+                                    color: isAvailable ? Colors.green : Colors.red,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        isAvailable ? Icons.check_circle : Icons.cancel,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                      Text(
+                                        '${stock.quantity ?? 0}',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      Text(
+                                        'pcs',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                SizedBox(width: 16),
+                                // Stock Details
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.straighten,
+                                            size: 16,
+                                            color: Colors.blue,
+                                          ),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'Size: ${stock.size ?? 'N/A'}',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                              color: isAvailable ? Colors.black : Colors.grey,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Icon(Icons.currency_rupee, size: 14, color: Colors.green),
+                                                    Text('Rate: ₹${stock.rate?.toStringAsFixed(2) ?? '0.00'}'),
+                                                  ],
+                                                ),
+                                                if (stock.hsnSac != null && stock.hsnSac!.isNotEmpty)
+                                                  Row(
+                                                    children: [
+                                                      Icon(Icons.tag, size: 14, color: Colors.orange),
+                                                      Text('HSN: ${stock.hsnSac}'),
+                                                    ],
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Icon(Icons.inventory, size: 14, color: Colors.blue),
+                                                    Text('Qty: ${stock.quantity ?? 0} pieces'),
+                                                  ],
+                                                ),
+                                                if (stock.mm != null && stock.mm!.isNotEmpty)
+                                                  Row(
+                                                    children: [
+                                                      Icon(Icons.straighten, size: 14, color: Colors.purple),
+                                                      Text('MM: ${stock.mm}'),
+                                                    ],
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (stock.colour != null && stock.colour!.isNotEmpty) ...[
+                                        SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            Icon(Icons.color_lens, size: 14, color: Colors.pink),
+                                            SizedBox(width: 4),
+                                            Container(
+                                              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue[100],
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: Text(
+                                                stock.colour!,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.blue[800],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                      SizedBox(height: 8),
+                                      // Status Badge
+                                      Container(
+                                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: isAvailable ? Colors.green[100] : Colors.red[100],
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(
+                                            color: isAvailable ? Colors.green[300]! : Colors.red[300]!,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              isAvailable ? Icons.check : Icons.error,
+                                              size: 14,
+                                              color: isAvailable ? Colors.green[700] : Colors.red[700],
+                                            ),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              isAvailable ? 'Available - Click to Select' : 'Out of Stock',
+                                              style: TextStyle(
+                                                color: isAvailable ? Colors.green[700] : Colors.red[700],
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (isAvailable)
+                                  Icon(
+                                    Icons.arrow_forward_ios,
+                                    color: Colors.grey,
+                                    size: 16,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Container(
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(8)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info, color: Colors.blue, size: 16),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Select any available size to continue with your invoice',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selectedStock != null) {
+      setState(() {
+        products[productIndex]['selectedStock'] = selectedStock;
+        products[productIndex]['hsnSac'] = selectedStock.hsnSac ?? '';
+        products[productIndex]['mm'] = selectedStock.mm ?? '';
+        products[productIndex]['rate'] = selectedStock.rate ?? 0.0;
+        products[productIndex]['price'] = selectedStock.rate ?? 0.0;
+        products[productIndex]['colour'] = selectedStock.colour ?? '';
+        products[productIndex]['size'] = selectedStock.size ?? '';
+
+        final availableQty = selectedStock.quantity ?? 0;
+        if (availableQty > 0) {
+          products[productIndex]['qty'] = 1;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Selected: ${selectedStock.size} - Available: $availableQty pieces'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else {
+          products[productIndex]['qty'] = 0;
+        }
+
+        updateProduct(productIndex);
+      });
+    }
   }
 
   void _loadInvoiceData() async {
     final inv = widget.invoiceToEdit!;
     invoiceNoCtrl.text = await _generateInvoiceNumber();
     dateCtrl.text = inv.date;
-    // yourFirmCtrl.text = inv.yourFirm;
-    // yourFirmAddressCtrl.text = inv.yourFirmAddress;
     buyerNameCtrl.text = inv.buyerName;
     buyerAddressCtrl.text = inv.buyerAddress;
     placeOfSupplyCtrl.text = inv.placeOfSupply;
-    // gstinSupplierCtrl.text = inv.gstinSupplier;
     gstinBuyerCtrl.text = inv.gstinBuyer;
     poNumberCtrl.text = inv.poNumber ?? '';
     mobileNoCtrl.text = inv.mobileNo ?? '';
@@ -109,15 +536,58 @@ class _AddInvoiceState extends State<AddInvoice> {
     signatureCtrl.text = inv.signature ?? '';
     hsnSacCtrl.text = inv.hsnSac ?? '';
     mmCtrl.text = inv.mm ?? '';
-    size = inv.size.toString();  // sizeValue should be a variable you declared
     useGST = inv.isGst ?? false;
-    payOnline = inv.isOnline?? false;
+    payOnline = inv.isOnline ?? false;
     paidAmountCtrl.text = (inv.paid_amount ?? 0).toString();
     unpaidAmountCtrl.text = (inv.unpaid_amount ?? 0).toString();
 
-    // IMPORTANT: call setState so UI updates with products
     setState(() {
       products = List<Map<String, dynamic>>.from(jsonDecode(inv.productDetails));
+    });
+  }
+
+  // Update this method in your _AddInvoiceState class
+  StockModel? getStockForProductAndSize(String productName, String size) {
+    if (productName.isEmpty || size.isEmpty) {
+      return null;
+    }
+
+    final stockItems = productStockMap[productName] ?? [];
+
+    try {
+      return stockItems.firstWhere((item) => item.size == size);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Add this method to your _AddInvoiceState class
+  void onSizeSelected(String size, int productIndex) {
+    final productName = products[productIndex]['product'] as String?;
+
+    if (productName == null || productName.isEmpty) {
+      return;
+    }
+
+    final stockForSize = getStockForProductAndSize(productName, size);
+
+    setState(() {
+      products[productIndex]['size'] = size;
+
+      if (stockForSize != null) {
+        products[productIndex]['selectedStock'] = stockForSize;
+        products[productIndex]['hsnSac'] = stockForSize.hsnSac ?? '';
+        products[productIndex]['mm'] = stockForSize.mm ?? '';
+        products[productIndex]['rate'] = stockForSize.rate ?? 0.0;
+        products[productIndex]['price'] = stockForSize.rate ?? 0.0;
+        products[productIndex]['colour'] = stockForSize.colour ?? '';
+      } else {
+        products[productIndex]['selectedStock'] = null;
+        products[productIndex]['rate'] = 0.0;
+        products[productIndex]['price'] = 0.0;
+      }
+
+      updateProduct(productIndex);
     });
   }
 
@@ -139,11 +609,18 @@ class _AddInvoiceState extends State<AddInvoice> {
         "sgst": 0.0,
         "subtotal": 0.0,
         "total": 0.0,
+        "selectedStock": null,
+        "availableStocks": [],
+        "availableSizes": <String>[],
+        "size": "",
+        "hsnSac": "",
+        "mm": "",
+        "colour": "",
       });
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) { // <-- check if attached
+      if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
@@ -188,18 +665,17 @@ class _AddInvoiceState extends State<AddInvoice> {
     return "INV-$datePart-$sequencePart";
   }
 
-  int? sheetSize1;
-  int? sheetSize2;
-  String? size;
+  String? _getMaxQuantityText(int productIndex) {
+    final product = products[productIndex];
+    final selectedStock = product['selectedStock'] as StockModel?;
 
-  final List<int> sheetSize1List = List.generate(
-    8,
-    (index) => index + 1,
-  ); // 1 to 8
-  final List<int> sheetSize2List = List.generate(
-    6,
-    (index) => index + 1,
-  ); // 1 to 6
+    if (selectedStock != null) {
+      final maxQty = selectedStock.quantity ?? 0;
+      return 'Max: $maxQty';
+    }
+
+    return null;
+  }
 
   Future<void> saveInvoice() async {
     if (products.isEmpty) {
@@ -211,6 +687,24 @@ class _AddInvoiceState extends State<AddInvoice> {
 
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
+    }
+
+    // Validate stock availability before saving
+    for (var product in products) {
+      final selectedStock = product['selectedStock'] as StockModel?;
+      final qty = product['qty'] as int?;
+
+      if (selectedStock != null && qty != null && qty > 0) {
+        if ((selectedStock.quantity ?? 0) < qty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Insufficient stock for ${selectedStock.productName} (${selectedStock.size}). Available: ${selectedStock.quantity ?? 0}, Requested: $qty'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+      }
     }
 
     final subtotal = getTotal('subtotal');
@@ -230,20 +724,30 @@ class _AddInvoiceState extends State<AddInvoice> {
       invoiceNoCtrl.text = invoiceNo;
     }
 
+    // Clean products data for JSON encoding - remove non-serializable objects
+    List<Map<String, dynamic>> cleanProducts = products.map((product) {
+      Map<String, dynamic> cleanProduct = Map.from(product);
+      // Remove StockModel objects and other non-serializable data
+      cleanProduct.remove('selectedStock');
+      cleanProduct.remove('availableStocks');
+      cleanProduct.remove('availableSizes');
+      return cleanProduct;
+    }).toList();
+
     final model = InvoiceModel(
       id: isEditMode ? widget.invoiceToEdit!.id : null,
       invoiceNo: invoiceNo,
       date: dateCtrl.text,
-      yourFirm: "yourFirmCtrl.text",
-      yourFirmAddress: "ourFirmAddressCtrl.text,",
+      yourFirm: "RUDRA ENTERPRISE",
+      yourFirmAddress: "199, Sneh Milan Soc, Near Diamond Hospital",
       buyerName: buyerNameCtrl.text,
       buyerAddress: buyerAddressCtrl.text,
       placeOfSupply: placeOfSupplyCtrl.text,
-      gstinSupplier: "gstinSupplierCtrl.text",
+      gstinSupplier: "24AHHPU2550P1ZU",
       gstinBuyer: gstinBuyerCtrl.text,
       poNumber: poNumberCtrl.text,
       mobileNo: mobileNoCtrl.text,
-      productDetails: jsonEncode(products),
+      productDetails: jsonEncode(cleanProducts), // Use cleaned products
       subtotal: subtotal,
       cgst: cgst,
       sgst: sgst,
@@ -262,7 +766,7 @@ class _AddInvoiceState extends State<AddInvoice> {
       mm: mmCtrl.text,
       paid_amount: double.tryParse(paidAmountCtrl.text) ?? 0.0,
       unpaid_amount: total - (double.tryParse(paidAmountCtrl.text) ?? 0),
-      size: "${sheetSize1 ?? 1} * ${sheetSize2 ?? 1}",
+      size: products.isNotEmpty && products.first['size'] != null ? products.first['size'] : "1*1",
       isGst: useGST,
       isOnline: payOnline,
     );
@@ -272,6 +776,9 @@ class _AddInvoiceState extends State<AddInvoice> {
         await repo.updateInvoice(model);
       } else {
         await repo.addInvoice(model);
+
+        // Update stock after successful save
+        // await _updateStockFromInvoice();
       }
 
       if (mounted) {
@@ -291,6 +798,7 @@ class _AddInvoiceState extends State<AddInvoice> {
         SnackBar(
           content: Text('Error saving invoice: ${e.toString()}'),
           backgroundColor: Colors.red,
+          duration: Duration(seconds: 5),
         ),
       );
     }
@@ -299,32 +807,31 @@ class _AddInvoiceState extends State<AddInvoice> {
   void _showDeleteConfirmation(int index) {
     showDialog(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: Text('Delete Product'),
-            content: Text('Are you sure you want to delete this product?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () {
-                  setState(() => products.removeAt(index));
-                  Navigator.pop(context);
-                },
-                child: Text('Delete', style: TextStyle(color: Colors.red)),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: Text('Delete Product'),
+        content: Text('Are you sure you want to delete this product?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
           ),
+          TextButton(
+            onPressed: () {
+              setState(() => products.removeAt(index));
+              Navigator.pop(context);
+            },
+            child: Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildSwitchOption(
-    String label,
-    bool value,
-    Function(bool) onChanged,
-  ) {
+      String label,
+      bool value,
+      Function(bool) onChanged,
+      ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
@@ -335,6 +842,179 @@ class _AddInvoiceState extends State<AddInvoice> {
             value: value,
             onChanged: onChanged,
             activeColor: Theme.of(context).primaryColor,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStockInfoWidget(int productIndex) {
+    final product = products[productIndex];
+    final selectedStock = product['selectedStock'] as StockModel?;
+    final productName = product['product'] as String?;
+
+    if (productName == null || productName.isEmpty || productName == 'No products available') {
+      return SizedBox.shrink();
+    }
+
+    if (selectedStock == null) {
+      return Container(
+        padding: EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.orange[50],
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.orange[200]!),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.info, color: Colors.orange[700]),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Tap "Select Stock" to choose size and view availability',
+                style: TextStyle(color: Colors.orange[700]),
+              ),
+            ),
+            TextButton.icon(
+              icon: Icon(Icons.inventory, size: 16),
+              label: Text('Select Stock'),
+              onPressed: () => _showStockSelectionDialog(productIndex),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.orange[700],
+                backgroundColor: Colors.orange[100],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final availableQty = selectedStock.quantity ?? 0;
+    final requestedQty = product['qty'] as int? ?? 0;
+    final isSufficient = availableQty >= requestedQty;
+
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isSufficient ? Colors.green[50] : Colors.red[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isSufficient ? Colors.green[200]! : Colors.red[200]!,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isSufficient ? Icons.check_circle : Icons.warning,
+                color: isSufficient ? Colors.green[700] : Colors.red[700],
+                size: 20,
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Selected Stock Information',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isSufficient ? Colors.green[700] : Colors.red[700],
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                icon: Icon(Icons.edit, size: 16),
+                label: Text('Change'),
+                onPressed: () => _showStockSelectionDialog(productIndex),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.blue[700],
+                  backgroundColor: Colors.blue[100],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          // Size Display Row
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.blue[100],
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: Colors.blue[300]!),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.straighten, size: 16, color: Colors.blue[700]),
+                SizedBox(width: 8),
+                Text(
+                  'Selected Size: ${selectedStock.size ?? 'N/A'}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue[700],
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Available: $availableQty pieces'),
+                    Text('Rate: ₹${selectedStock.rate?.toStringAsFixed(2) ?? '0.00'}'),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (selectedStock.hsnSac != null && selectedStock.hsnSac!.isNotEmpty)
+                      Text('HSN/SAC: ${selectedStock.hsnSac}'),
+                    if (selectedStock.mm != null && selectedStock.mm!.isNotEmpty)
+                      Text('MM: ${selectedStock.mm}'),
+                    if (selectedStock.colour != null && selectedStock.colour!.isNotEmpty)
+                      Text('Colour: ${selectedStock.colour}'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: isSufficient ? Colors.green[100] : Colors.red[100],
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isSufficient ? Colors.green[300]! : Colors.red[300]!,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isSufficient ? Icons.check : Icons.error,
+                  size: 16,
+                  color: isSufficient ? Colors.green[700] : Colors.red[700],
+                ),
+                SizedBox(width: 4),
+                Text(
+                  isSufficient
+                      ? 'Stock Available (Requested: $requestedQty)'
+                      : 'Insufficient Stock (Available: $availableQty, Requested: $requestedQty)',
+                  style: TextStyle(
+                    color: isSufficient ? Colors.green[700] : Colors.red[700],
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -363,7 +1043,6 @@ class _AddInvoiceState extends State<AddInvoice> {
           child: ListView(
             controller: _scrollController,
             children: [
-              // Seller Details - Static
               Row(
                 children: [
                   Expanded(
@@ -372,94 +1051,84 @@ class _AddInvoiceState extends State<AddInvoice> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Buyer Details',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: theme.primaryColor,
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          FutureBuilder<List<String>>(
-                            future: repo.getAllBuyerNames(), // 👈 defined below
-                            builder: (context, snapshot) {
-                              final names = snapshot.data ?? [];
+                        Text(
+                        'Buyer Details',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: theme.primaryColor,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      FutureBuilder<List<String>>(
+                        future: repo.getAllBuyerNames(),
+                        builder: (context, snapshot) {
+                          final names = snapshot.data ?? [];
 
-                              return Autocomplete<String>(
-                                optionsBuilder: (TextEditingValue textEditingValue) {
-                                  if (textEditingValue.text == '') {
-                                    return const Iterable<String>.empty();
-                                  }
-                                  return names.where((String option) {
-                                    return option
-                                        .toLowerCase()
-                                        .contains(textEditingValue.text.toLowerCase());
-                                  });
-                                },
-                                fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                          return Autocomplete<String>(
+                            optionsBuilder: (TextEditingValue textEditingValue) {
+                              if (textEditingValue.text == '') {
+                                return const Iterable<String>.empty();
+                              }
+                              return names.where((String option) {
+                                return option
+                                    .toLowerCase()
+                                    .contains(textEditingValue.text.toLowerCase());
+                              });
+                            },
+                            fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                              controller.text = buyerNameCtrl.text;
 
-                                  controller.text = buyerNameCtrl.text;
-
-                                  controller.addListener(() {
-                                    buyerNameCtrl.text = controller.text;
-                                  });
-                                  return TextFormField(
-                                    controller: controller,
-                                    focusNode: focusNode,
-                                    decoration: InputDecoration(labelText: 'Name'),
-                                    validator: (val) => val?.isEmpty ?? true ? 'Required' : null,
-                                  );
-                                },
-                                onSelected: (String selection) async {
-                                  final customer = await repo.fetchCustomerByName(selection);
-                                  if (customer != null) {
-                                    buyerAddressCtrl.text = customer['buyer_address'] ?? '';
-                                    mobileNoCtrl.text = customer['mobile_no'] ?? '';
-                                    gstinBuyerCtrl.text = customer['gstin_buyer'] ?? '';
-                                    poNumberCtrl.text = customer['po_number'] ?? '';
-                                    placeOfSupplyCtrl.text = customer['place_of_supply'] ?? '';
-                                  }
-                                },
+                              controller.addListener(() {
+                                buyerNameCtrl.text = controller.text;
+                              });
+                              return TextFormField(
+                                controller: controller,
+                                focusNode: focusNode,
+                                decoration: InputDecoration(labelText: 'Name'),
+                                validator: (val) => val?.isEmpty ?? true ? 'Required' : null,
                               );
                             },
+                            onSelected: (String selection) async {
+                              final customer = await repo.fetchCustomerByName(selection);
+                              if (customer != null) {
+                                buyerAddressCtrl.text = customer['buyer_address'] ?? '';
+                                mobileNoCtrl.text = customer['mobile_no'] ?? '';
+                                gstinBuyerCtrl.text = customer['gstin_buyer'] ?? '';
+                                poNumberCtrl.text = customer['po_number'] ?? '';
+                                placeOfSupplyCtrl.text = customer['place_of_supply'] ?? '';
+                              }
+                            },
+                          );
+                        },
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildCompactFormField(
+                              controller: mobileNoCtrl,
+                              label: "Mobile",
+                              keyboardType: TextInputType.phone,
+                              maxLength: 10,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                            ),
                           ),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildCompactFormField(
-                                  controller: mobileNoCtrl,
-                                  label: "Mobile",
-                                  keyboardType: TextInputType.phone,
-                                  maxLength: 10,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                  ],
-                                  validator:
-                                      (val) =>
-                                          val == null ||
-                                                  !RegExp(
-                                                    r'^\d{10}$',
-                                                  ).hasMatch(val)
-                                              ? 'Invalid number'
-                                              : null,
-                                ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: _buildCompactFormField(
+                                controller: poNumberCtrl,
+                                label: "PO Number",
                               ),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: _buildCompactFormField(
-                                  controller: poNumberCtrl,
-                                  label: "PO Number",
-                                ),
-                              ),
+                            ),
                             ],
                           ),
                           _buildCompactFormField(
                             controller: buyerAddressCtrl,
                             label: "Address",
-                            validator:
-                                (val) =>
-                                    val?.isEmpty ?? true ? 'Required' : null,
+                            validator: (val) =>
+                            val?.isEmpty ?? true ? 'Required' : null,
                           ),
                           Row(
                             children: [
@@ -550,7 +1219,7 @@ class _AddInvoiceState extends State<AddInvoice> {
               _buildSwitchOption(
                 'Pay Online',
                 payOnline,
-                (val) => setState(() => payOnline = val),
+                    (val) => setState(() => payOnline = val),
               ),
 
               // Bank Details (only shown if payOnline is true)
@@ -572,11 +1241,10 @@ class _AddInvoiceState extends State<AddInvoice> {
                       _buildCompactFormField(
                         controller: bankNameCtrl,
                         label: "Bank Name",
-                        validator:
-                            (val) =>
-                                payOnline && (val?.isEmpty ?? true)
-                                    ? 'Required'
-                                    : null,
+                        validator: (val) =>
+                        payOnline && (val?.isEmpty ?? true)
+                            ? 'Required'
+                            : null,
                       ),
                       Row(
                         children: [
@@ -655,307 +1323,270 @@ class _AddInvoiceState extends State<AddInvoice> {
                   ),
                 ),
 
+// In the build method, replace the products mapping section with this:
+
               ...products.asMap().entries.map((entry) {
                 int index = entry.key;
                 var item = entry.value;
-                return Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.delete, color: Colors.red),
-                            onPressed: () => _showDeleteConfirmation(index),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value:
-                                  item['product']?.isEmpty ?? true
-                                      ? null
-                                      : item['product'],
-                              decoration: InputDecoration(
-                                labelText: "Product Name",
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
+                final availableSizes = (item['availableSizes'] as List<String>?) ?? [];
+
+                return Card(
+                  margin: EdgeInsets.only(bottom: 16),
+                  elevation: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Product ${index + 1}',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: theme.primaryColor,
                               ),
-                              items: [
-                                // Replace with your actual product list
-                                DropdownMenuItem(
-                                  value: "Product 1",
-                                  child: Text("Product 1"),
-                                ),
-                                DropdownMenuItem(
-                                  value: "Product 2",
-                                  child: Text("Product 2"),
-                                ),
-                                DropdownMenuItem(
-                                  value: "Product 3",
-                                  child: Text("Product 3"),
-                                ),
-                              ],
-                              onChanged: (val) {
-                                setState(() {
-                                  item['product'] = val ?? '';
-                                });
-                              },
-                              validator:
-                                  (value) =>
-                                      value == null || value.isEmpty
-                                          ? 'Select a product'
-                                          : null,
                             ),
-                          ),
-                          SizedBox(width: 12),
-                          Row(
-                            children: [
-                              // Dropdown for d1
-                              DropdownButton<int>(
-                                hint: Text('Select D1'),
-                                value: sheetSize1,
-                                items:
-                                    sheetSize1List.map((val) {
-                                      return DropdownMenuItem(
-                                        value: val,
-                                        child: Text(val.toString()),
-                                      );
-                                    }).toList(),
+                            IconButton(
+                              icon: Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _showDeleteConfirmation(index),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 16),
+
+                        // Product Selection Row
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: DropdownButtonFormField<String>(
+                                value: item['product']?.isEmpty ?? true ? null : item['product'],
+                                decoration: InputDecoration(
+                                  labelText: "Product Name",
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                                ),
+                                items: availableProducts.isEmpty
+                                    ? [
+                                  DropdownMenuItem<String>(
+                                    value: 'No products available',
+                                    child: Text('No products available',
+                                        style: TextStyle(color: Colors.red)),
+                                  )
+                                ]
+                                    : availableProducts.map((product) {
+                                  return DropdownMenuItem(
+                                    value: product,
+                                    child: Text(product),
+                                  );
+                                }).toList(),
                                 onChanged: (val) {
-                                  setState(() {
-                                    sheetSize1 = val;
-                                  });
+                                  onProductSelected(val ?? '', index);
+                                },
+                                validator: (value) => value == null || value.isEmpty
+                                    ? 'Select a product'
+                                    : null,
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                initialValue: item['desc'],
+                                decoration: InputDecoration(
+                                  labelText: "Description",
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                                ),
+                                onChanged: (val) => item['desc'] = val,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        SizedBox(height: 16),
+
+                        // Size and HSN/SAC Row
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: item['size']?.isEmpty ?? true ? null : item['size'],
+                                decoration: InputDecoration(
+                                  labelText: "Size",
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                                ),
+                                items: availableSizes.isEmpty
+                                    ? [
+                                  DropdownMenuItem<String>(
+                                    value: null,
+                                    child: Text('No sizes available', style: TextStyle(color: Colors.grey)),
+                                  )
+                                ]
+                                    : availableSizes.map((size) {
+                                  return DropdownMenuItem(
+                                    value: size,
+                                    child: Text(size),
+                                  );
+                                }).toList(),
+                                onChanged: availableSizes.isEmpty ? null : (val) {
+                                  if (val != null) {
+                                    onSizeSelected(val, index);
+                                  }
+                                },
+                                validator: (value) => availableSizes.isNotEmpty && (value == null || value.isEmpty)
+                                    ? 'Select a size'
+                                    : null,
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                initialValue: item['hsnSac'] ?? '',
+                                decoration: InputDecoration(
+                                  labelText: "HSN/SAC",
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                                ),
+                                onChanged: (val) => item['hsnSac'] = val,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        SizedBox(height: 16),
+
+                        // MM Row
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                initialValue: item['mm'] ?? '',
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                decoration: InputDecoration(
+                                  labelText: "MM",
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                                ),
+                                onChanged: (val) => item['mm'] = val,
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(child: SizedBox()), // Empty space for alignment
+                          ],
+                        ),
+
+                        SizedBox(height: 16),
+
+                        // Price, Quantity, Discount Row
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                initialValue: item['price'].toString(),
+                                decoration: InputDecoration(
+                                  labelText: "Price",
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                                ),
+                                keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                validator: (val) => val == null || double.tryParse(val) == null
+                                    ? 'Invalid'
+                                    : null,
+                                onChanged: (val) {
+                                  item['price'] = double.tryParse(val) ?? 0.0;
+                                  updateProduct(index);
                                 },
                               ),
-                              const SizedBox(width: 20),
-                              // Dropdown for d2
-                              DropdownButton<int>(
-                                hint: Text('Select D2'),
-                                value: sheetSize2,
-                                items:
-                                    sheetSize2List.map((val) {
-                                      return DropdownMenuItem(
-                                        value: val,
-                                        child: Text(val.toString()),
-                                      );
-                                    }).toList(),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                initialValue: item['qty'].toString(),
+                                decoration: InputDecoration(
+                                  labelText: "Quantity",
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                                  suffixText: _getMaxQuantityText(index),
+                                  suffixStyle: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                keyboardType: TextInputType.number,
+                                validator: (val) {
+                                  if (val == null || int.tryParse(val) == null) {
+                                    return 'Invalid';
+                                  }
+                                  final qty = int.parse(val);
+                                  final selectedStock = item['selectedStock'] as StockModel?;
+                                  if (selectedStock != null) {
+                                    final maxQty = selectedStock.quantity ?? 0;
+                                    if (qty > maxQty) {
+                                      return 'Max: $maxQty';
+                                    }
+                                  }
+                                  return null;
+                                },
                                 onChanged: (val) {
-                                  setState(() {
-                                    sheetSize2 = val;
-                                  });
+                                  final qty = int.tryParse(val) ?? 1;
+                                  final selectedStock = item['selectedStock'] as StockModel?;
+
+                                  if (selectedStock != null) {
+                                    final maxQty = selectedStock.quantity ?? 0;
+                                    if (qty > maxQty) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Only $maxQty pieces available in stock'),
+                                          backgroundColor: Colors.orange,
+                                          duration: Duration(seconds: 2),
+                                        ),
+                                      );
+                                      item['qty'] = maxQty;
+                                    } else {
+                                      item['qty'] = qty;
+                                    }
+                                  } else {
+                                    item['qty'] = qty;
+                                  }
+
+                                  updateProduct(index);
+                                  setState(() {}); // Refresh to show validation
                                 },
                               ),
-                            ],
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: TextFormField(
-                              initialValue: item['desc'],
-                              decoration: InputDecoration(
-                                labelText: "Description",
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                              ),
-                              onChanged: (val) => item['desc'] = val,
                             ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              initialValue: item['hsnSac'] ?? '',
-                              decoration: InputDecoration(
-                                labelText: "HSN/SAC",
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 12,
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                initialValue: item['discount_percent'].toString(),
+                                decoration: InputDecoration(
+                                  labelText: "Discount %",
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 12),
                                 ),
+                                keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                validator: (val) => val == null || double.tryParse(val) == null
+                                    ? 'Invalid'
+                                    : null,
+                                onChanged: (val) {
+                                  item['discount_percent'] = double.tryParse(val) ?? 0.0;
+                                  updateProduct(index);
+                                },
                               ),
-                              onChanged: (val) => item['hsnSac'] = val,
                             ),
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: TextFormField(
-                              initialValue: item['mm'] ?? '',
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                              decoration: InputDecoration(
-                                labelText: "MM",
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                              ),
-                              onChanged: (val) => item['mm'] = val,
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                              initialValue: item['price'].toString(),
-                              decoration: InputDecoration(
-                                labelText: "Price",
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                              ),
-                              keyboardType: TextInputType.numberWithOptions(
-                                decimal: true,
-                              ),
-                              validator:
-                                  (val) =>
-                                      val == null ||
-                                              double.tryParse(val) == null
-                                          ? 'Invalid'
-                                          : null,
-                              onChanged: (val) {
-                                item['price'] = double.tryParse(val) ?? 0.0;
-                                updateProduct(index);
-                              },
-                            ),
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: TextFormField(
-                              initialValue: item['qty'].toString(),
-                              decoration: InputDecoration(
-                                labelText: "Quantity",
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                              ),
-                              keyboardType: TextInputType.number,
-                              validator:
-                                  (val) =>
-                                      val == null || int.tryParse(val) == null
-                                          ? 'Invalid'
-                                          : null,
-                              onChanged: (val) {
-                                item['qty'] = int.tryParse(val) ?? 1;
-                                updateProduct(index);
-                              },
-                            ),
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: TextFormField(
-                              initialValue: item['discount_percent'].toString(),
-                              decoration: InputDecoration(
-                                labelText: "Discount %",
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                              ),
-                              keyboardType: TextInputType.numberWithOptions(
-                                decimal: true,
-                              ),
-                              validator:
-                                  (val) =>
-                                      val == null ||
-                                              double.tryParse(val) == null
-                                          ? 'Invalid'
-                                          : null,
-                              onChanged: (val) {
-                                item['discount_percent'] =
-                                    double.tryParse(val) ?? 0.0;
-                                updateProduct(index);
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      // SizedBox(height: 16),
-                      // Container(
-                      //   padding: EdgeInsets.all(12),
-                      //   decoration: BoxDecoration(
-                      //     color: isDarkMode ? Colors.grey[800] : Colors.grey[100],
-                      //     borderRadius: BorderRadius.circular(8),
-                      //   ),
-                      //   child: Column(
-                      //     children: [
-                      //       Row(
-                      //         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      //         children: [
-                      //           Text("Amount:", style: TextStyle(fontWeight: FontWeight.bold)),
-                      //           Text("₹${((item['price'] ?? 0) * (item['qty'] ?? 1)).toStringAsFixed(2)}"),
-                      //         ],
-                      //       ),
-                      //       SizedBox(height: 6),
-                      //       Row(
-                      //         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      //         children: [
-                      //           Text("Discount:", style: TextStyle(fontWeight: FontWeight.bold)),
-                      //           Text("-₹${item['discount_amount'].toStringAsFixed(2)}",
-                      //               style: TextStyle(color: Colors.red)),
-                      //         ],
-                      //       ),
-                      //       if (useGST) ...[
-                      //         SizedBox(height: 6),
-                      //         Row(
-                      //           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      //           children: [
-                      //             Text("CGST (${(item['gst_percent'] / 2).toStringAsFixed(1)}%):",
-                      //                 style: TextStyle(fontWeight: FontWeight.bold)),
-                      //             Text("₹${item['cgst'].toStringAsFixed(2)}"),
-                      //           ],
-                      //         ),
-                      //         SizedBox(height: 6),
-                      //         Row(
-                      //           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      //           children: [
-                      //             Text("SGST (${(item['gst_percent'] / 2).toStringAsFixed(1)}%):",
-                      //                 style: TextStyle(fontWeight: FontWeight.bold)),
-                      //             Text("₹${item['sgst'].toStringAsFixed(2)}"),
-                      //           ],
-                      //         ),
-                      //       ],
-                      //       Divider(height: 20),
-                      //       Row(
-                      //         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      //         children: [
-                      //           Text("TOTAL:", style: TextStyle(
-                      //             fontWeight: FontWeight.bold,
-                      //             fontSize: 16,
-                      //             color: theme.primaryColor,
-                      //           )),
-                      //           Text("₹${item['total'].toStringAsFixed(2)}", style: TextStyle(
-                      //             fontWeight: FontWeight.bold,
-                      //             fontSize: 16,
-                      //             color: theme.primaryColor,
-                      //           )),
-                      //         ],
-                      //       ),
-                      //     ],
-                      //   ),
-                      // ),
-                    ],
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 );
               }).toList(),
+
               // Invoice Summary
               if (products.isNotEmpty) ...[
                 Card(
@@ -974,10 +1605,7 @@ class _AddInvoiceState extends State<AddInvoice> {
                           ),
                         ),
                         SizedBox(height: 8),
-                        _buildCompactSummaryRow(
-                          "Subtotal:",
-                          getTotal('subtotal'),
-                        ),
+                        _buildCompactSummaryRow("Subtotal:", getTotal('subtotal')),
                         if (useGST) ...[
                           _buildCompactSummaryRow(
                             "CGST (${(double.tryParse(gstPercentCtrl.text) ?? 18) / 2}%):",
@@ -989,41 +1617,30 @@ class _AddInvoiceState extends State<AddInvoice> {
                           ),
                         ],
                         Divider(height: 16),
-                        _buildCompactSummaryRow(
-                          "TOTAL:",
-                          getTotal('total'),
-                          isTotal: true,
-                        ),
+                        _buildCompactSummaryRow("TOTAL:", getTotal('total'), isTotal: true),
                         SizedBox(height: 8),
                         _buildCompactFormField(
                           controller: paidAmountCtrl,
                           label: "Paid Amount",
-                          keyboardType: TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
+                          keyboardType: TextInputType.numberWithOptions(decimal: true),
                           validator: (val) {
-                            if (val == null || val.isEmpty)
-                              return 'Enter amount';
+                            if (val == null || val.isEmpty) return 'Enter amount';
                             final paid = double.tryParse(val) ?? 0;
                             final total = getTotal('total');
-                            if (paid > total)
-                              return 'Cannot pay more than total';
+                            if (paid > total) return 'Cannot pay more than total';
                             return null;
                           },
                           onChanged: (val) {
                             setState(() {
-                              // Update unpaid amount when paid amount changes
                               final paid = double.tryParse(val) ?? 0;
                               final total = getTotal('total');
-                              unpaidAmountCtrl.text = (total - paid)
-                                  .toStringAsFixed(2);
+                              unpaidAmountCtrl.text = (total - paid).toStringAsFixed(2);
                             });
                           },
                         ),
                         _buildCompactSummaryRow(
                           "Unpaid Amount:",
-                          getTotal('total') -
-                              (double.tryParse(paidAmountCtrl.text) ?? 0),
+                          getTotal('total') - (double.tryParse(paidAmountCtrl.text) ?? 0),
                           isTotal: true,
                         ),
                       ],
@@ -1033,8 +1650,7 @@ class _AddInvoiceState extends State<AddInvoice> {
               ],
 
               // Save Button
-              if (UserSession.canEdit('Invoice') ||
-                  UserSession.canCreate('Invoice'))
+              if (UserSession.canEdit('Invoice') || UserSession.canCreate('Invoice'))
                 ElevatedButton(
                   onPressed: saveInvoice,
                   style: ElevatedButton.styleFrom(
@@ -1089,12 +1705,7 @@ class _AddInvoiceState extends State<AddInvoice> {
     );
   }
 
-  // Compact summary row
-  Widget _buildCompactSummaryRow(
-    String label,
-    double amount, {
-    bool isTotal = false,
-  }) {
+  Widget _buildCompactSummaryRow(String label, double amount, {bool isTotal = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(

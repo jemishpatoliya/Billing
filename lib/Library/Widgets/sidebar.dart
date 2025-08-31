@@ -15,6 +15,7 @@ class _SidebarState extends State<Sidebar> {
     'quotations': false,
     'invoices': false,
     'purchases': false,
+    'stock': false,
   };
 
   @override
@@ -233,6 +234,24 @@ class _SidebarState extends State<Sidebar> {
                     ),
                   ],
                   onExpansionChanged: (val) => setState(() => _expandedSections['purchases'] = val),
+                ),
+                
+                // Stock Management
+                _buildExpansionTile(
+                  context,
+                  icon: Icons.inventory_outlined,
+                  title: 'Stock Management',
+                  isExpanded: _expandedSections['stock']!,
+                  children: [
+                    _buildMenuItem(
+                      context,
+                      icon: Icons.assessment_outlined,
+                      title: 'Stock Overview',
+                      onTap: () => navCubit.changePage('stock_management'),
+                      isNested: true,
+                    ),
+                  ],
+                  onExpansionChanged: (val) => setState(() => _expandedSections['stock'] = val),
                 ),
               ],
             ),

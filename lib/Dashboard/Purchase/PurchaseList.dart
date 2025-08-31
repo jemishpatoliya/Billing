@@ -1,4 +1,4 @@
-  import 'dart:io';
+import 'dart:io';
   import 'package:url_launcher/url_launcher.dart';
   import 'package:Invoxel/Database/UserRepository.dart';
   import 'package:flutter/material.dart';import '../../Model/ProductModel.dart';
@@ -91,8 +91,6 @@
             
             if (confirm == true) {
               try {
-                final repo = UserRepository();
-                await repo.resetAllSKUNumbers();
                 await GlobalSKU.resetCounter();
                 await fetchPurchases();
                 
@@ -291,7 +289,51 @@
       // Save the updated purchase to database
       await repo.updatePurchase(widget.purchase);
       
+      // Update stock when SKUs are generated
+      await _updateStockFromPurchase();
+      
       print('💾 Purchase updated in database with SKUs');
+    }
+
+    // Update stock from purchase data
+    Future<void> _updateStockFromPurchase() async {
+      try {
+        final repo = UserRepository();
+
+        for (var prod in widget.purchase.products ?? []) {
+          if (prod.productName != null && prod.qty != null && prod.qty! > 0) {
+            // Determine size from the product
+            // Parse mm value which should be in format like "4*8"
+            String size;
+            if (prod.mm != null && prod.mm!.contains('*')) {
+              // Use the mm value directly as size, just replacing * with ×
+              size = prod.mm!.replaceAll('*', '×');
+            } else {
+              // Fallback to default size if mm is not in expected format
+              size = "${prod.mm ?? '1'}×${prod.mm ?? '1'}";
+            }
+            print('Using size: $size for product: ${prod.productName}');
+
+            // Process stock purchase
+            await repo. processStockPurchase(
+              prod.productName!,
+              size,
+              prod.qty!,
+              widget.purchase.purchaseId ?? '',
+              hsnSac: prod.hsnSac,
+              mm: prod.mm,
+              rate: prod.rate,
+              colour: prod.colour,
+              colourCode: prod.colourCode,
+              per: prod.per,
+            );
+
+            print('📦 Stock updated for ${prod.productName} - $size: +${prod.qty} pieces');
+          }
+        }
+      } catch (e) {
+        print('❌ Error updating stock: $e');
+      }
     }
 
     Future<void> generateQRCodePDF() async {
